@@ -26,6 +26,17 @@ const GITHUB_BRANCH = "main";
 
 const RAW_BASE = `https://raw.githubusercontent.com/${GITHUB_OWNER}/${GITHUB_REPO}/${GITHUB_BRANCH}`;
 const STATE_URL = `${RAW_BASE}/state.json`;
+// raw.githubusercontent.com deliberately serves files as text/plain or
+// application/octet-stream — never a JS content-type — specifically so
+// raw user content can never be executed as a script by anything that
+// fetches it directly. That's exactly what a <script type="module"> load
+// needs, so a redirect there fails with a strict-MIME-type error (confirmed
+// live, in both Chrome and Brave) despite the redirect itself succeeding.
+// jsDelivr's GitHub CDN mode exists specifically to serve GitHub repo files
+// AS proper web assets — correct content-type included — which is why only
+// the two actual script files point here; state.json (fetched as plain
+// JSON, where content-type doesn't matter) stays on raw GitHub above.
+const CDN_BASE = `https://cdn.jsdelivr.net/gh/${GITHUB_OWNER}/${GITHUB_REPO}@${GITHUB_BRANCH}`;
 const MAIN_RULE_ID = 1;
 const TV_RULE_ID = 2;
 
@@ -62,13 +73,13 @@ function syncRules() {
           {
             id: MAIN_RULE_ID,
             priority: 1,
-            action: { type: "redirect", redirect: { url: `${RAW_BASE}/patched-bundle.js` } },
+            action: { type: "redirect", redirect: { url: `${CDN_BASE}/patched-bundle.js` } },
             condition: { urlFilter: mainBundleUrlFilter(state.mainFilename), resourceTypes: ["script"] },
           },
           {
             id: TV_RULE_ID,
             priority: 1,
-            action: { type: "redirect", redirect: { url: `${RAW_BASE}/patched-terrainview.js` } },
+            action: { type: "redirect", redirect: { url: `${CDN_BASE}/patched-terrainview.js` } },
             condition: { urlFilter: `||swervle.com/assets/${state.tvFilename}`, resourceTypes: ["script"] },
           },
         ],

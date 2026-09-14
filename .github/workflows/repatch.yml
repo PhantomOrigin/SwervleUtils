@@ -6,8 +6,14 @@ name: Re-patch Swervle bundle
 # the extension self-heal after a swervle.com redeploy with zero new
 # extension release — background.js in the extension just reads state.json
 # (a few bytes) from this repo's raw GitHub URL to know which live
-# filenames to redirect, and redirects to the ALSO-hosted-here patched
-# files, which update independently of the extension itself.
+# filenames to redirect, and redirects to the two patched files as served
+# through jsDelivr's GitHub CDN (raw.githubusercontent.com serves files as
+# text/plain, which fails a <script type="module"> load's strict MIME-type
+# check — jsDelivr serves the same content with a correct JS content-type).
+# jsDelivr caches aggressively for performance, so the purge step at the end
+# forces it to pick up a real change immediately rather than waiting out
+# its own cache lifetime — otherwise every install could keep running a
+# stale patch for hours after this workflow already fixed it.
 on:
   schedule:
     # Every 15 minutes. Swervle redeploys somewhat often; this bounds how
@@ -43,13 +49,22 @@ jobs:
         # something broken.
 
       - name: Commit and push if anything changed
+        id: commit
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add patched-bundle.js patched-terrainview.js state.json
           if git diff --staged --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
             echo "No changes — swervle hasn't redeployed (or redeployed with byte-identical patch-relevant code) since the last run."
           else
             git commit -m "Auto re-patch $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
             git push
+            echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Purge jsDelivr's cache for the two published files
+        if: steps.commit.outputs.changed == 'true'
+        run: |
+          curl -fsS "https://purge.jsdelivr.net/gh/${{ github.repository }}@main/patched-bundle.js"
+          curl -fsS "https://purge.jsdelivr.net/gh/${{ github.repository }}@main/patched-terrainview.js"

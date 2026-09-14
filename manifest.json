@@ -10,7 +10,7 @@
     "128": "icons/icon-128.png"
   },
   "permissions": ["declarativeNetRequest", "storage"],
-  "host_permissions": ["https://swervle.com/*", "https://raw.githubusercontent.com/*"],
+  "host_permissions": ["https://swervle.com/*", "https://raw.githubusercontent.com/*", "https://cdn.jsdelivr.net/*"],
   "background": {
     "service_worker": "background.js"
   },
