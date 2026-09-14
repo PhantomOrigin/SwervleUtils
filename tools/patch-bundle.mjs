@@ -92,10 +92,17 @@ async function verifyEsmIntegrity(fileLabel, absPath) {
     console.log(`✓ [${fileLabel}] parsed and linked cleanly (imported with no error at all — unexpected but fine).`);
     return true;
   } catch (err) {
+    // Matched on the stable "Received protocol 'https:'" part rather than
+    // the more verbose "Only URLs with a scheme in: ..." prefix — that
+    // prefix's exact wording changed between Node versions (older Node:
+    // "file and data"; Node 24+: "file, data, and node", once it added
+    // node: import support), which silently broke this check the moment
+    // the CI runner picked up Node 24 — a real false positive that briefly
+    // blocked every otherwise-successful patch run.
     const isExpectedNetworkError =
       err instanceof Error &&
       !(err instanceof SyntaxError) &&
-      /scheme in: file and data|Cannot find module|ENOTFOUND|fetch failed/i.test(err.message);
+      /Received protocol ['"]https:['"]|Only URLs with a scheme|Cannot find module|ENOTFOUND|fetch failed/i.test(err.message);
     if (isExpectedNetworkError) {
       console.log(`✓ [${fileLabel}] parsed and linked cleanly (only failed on an expected unresolvable https:// import).`);
       return true;
