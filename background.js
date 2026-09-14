@@ -19,8 +19,8 @@
 // change what it redirects TO, only which requests it redirects.
 
 // ---- EDIT THESE after creating your GitHub repo ----
-const GITHUB_OWNER = "YOUR_GITHUB_USERNAME";
-const GITHUB_REPO = "YOUR_REPO_NAME";
+const GITHUB_OWNER = "PhantomOrigin";
+const GITHUB_REPO = "SwervleUtils";
 const GITHUB_BRANCH = "main";
 // -----------------------------------------------------
 
