@@ -51,7 +51,7 @@
 //     state.json (the real hashes/filenames aren't meaningful offline).
 // ============================================================================
 
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, join } from "node:path";
 import {
@@ -168,16 +168,37 @@ async function main() {
   // raw host as the patched files themselves) — just enough for it to know
   // which live swervle.com filenames to redirect, without ever fetching
   // swervle.com itself or running any derivation logic in the browser.
+  //
+  // Only actually rewritten when something MEANINGFUL changed — `patchedAt`
+  // is excluded from that comparison specifically so an unchanged run
+  // doesn't touch the file at all (a fresh timestamp every 15 minutes would
+  // otherwise make every single run "changed" from git's point of view,
+  // forcing a commit — and therefore a push — every run regardless of
+  // whether swervle.com actually redeployed).
   if (!OFFLINE) {
-    const state = {
+    const statePath = join(OUT_DIR, "state.json");
+    const newState = {
       mainFilename,
       tvFilename,
-      patchedAt: new Date().toISOString(),
       patchCount: results.length,
       failedPatches: failed.map((r) => `${r.file}/${r.name}`),
     };
-    writeFileSync(join(OUT_DIR, "state.json"), JSON.stringify(state, null, 2) + "\n", "utf8");
-    console.log(`state.json written: ${JSON.stringify(state)}`);
+    let priorState = null;
+    if (existsSync(statePath)) {
+      try {
+        const { patchedAt: _ignored, ...rest } = JSON.parse(readFileSync(statePath, "utf8"));
+        priorState = rest;
+      } catch {
+        // Malformed/missing prior file — treat as "changed" and rewrite below.
+      }
+    }
+    if (priorState && JSON.stringify(priorState) === JSON.stringify(newState)) {
+      console.log("state.json unchanged (same filenames/patch results as last run) — leaving it as-is.");
+    } else {
+      const state = { ...newState, patchedAt: new Date().toISOString() };
+      writeFileSync(statePath, JSON.stringify(state, null, 2) + "\n", "utf8");
+      console.log(`state.json written: ${JSON.stringify(state)}`);
+    }
   }
 
   if (!mainOk || !tvOk) {
