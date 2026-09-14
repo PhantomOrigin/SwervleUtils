@@ -1,0 +1,55 @@
+name: Re-patch Swervle bundle
+
+# Runs tools/patch-bundle.mjs against the LIVE swervle.com on a schedule,
+# and commits patched-bundle.js/patched-terrainview.js/state.json only when
+# something actually changed. This is what makes every installed copy of
+# the extension self-heal after a swervle.com redeploy with zero new
+# extension release — background.js in the extension just reads state.json
+# (a few bytes) from this repo's raw GitHub URL to know which live
+# filenames to redirect, and redirects to the ALSO-hosted-here patched
+# files, which update independently of the extension itself.
+on:
+  schedule:
+    # Every 15 minutes. Swervle redeploys somewhat often; this bounds how
+    # long the extension can be running against a stale patch to roughly
+    # this interval (plus however long until a player next has the site
+    # open — see background.js's own on-page-load check for the rest of
+    # that story).
+    - cron: "*/15 * * * *"
+  workflow_dispatch: {} # lets you trigger a run manually from the Actions tab
+
+permissions:
+  contents: write # needed to commit/push the updated patched files
+
+concurrency:
+  group: repatch
+  cancel-in-progress: false # let an in-flight run finish rather than racing a git push
+
+jobs:
+  repatch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Re-derive and re-patch against the live site
+        run: node tools/patch-bundle.mjs
+        # A non-zero exit here (ESM-integrity check failed) stops the
+        # workflow before the commit step below — the last known-good
+        # published files stay live instead of being overwritten with
+        # something broken.
+
+      - name: Commit and push if anything changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add patched-bundle.js patched-terrainview.js state.json
+          if git diff --staged --quiet; then
+            echo "No changes — swervle hasn't redeployed (or redeployed with byte-identical patch-relevant code) since the last run."
+          else
+            git commit -m "Auto re-patch $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+            git push
+          fi

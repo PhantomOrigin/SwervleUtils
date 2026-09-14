@@ -1,0 +1,1044 @@
+/* Swervle Replay Viewer — injected UI styles */
+
+.srv-btn-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+}
+.srv-watch-btn,
+.srv-race-btn,
+.srv-eye-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 7px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 999px;
+  cursor: pointer;
+  line-height: 1.6;
+}
+.srv-watch-btn {
+  border: 1px solid rgba(90, 200, 255, 0.5);
+  background: rgba(90, 200, 255, 0.12);
+  color: #5ac8ff;
+}
+.srv-watch-btn:hover {
+  background: rgba(90, 200, 255, 0.25);
+}
+.srv-race-btn {
+  border: 1px solid rgba(255, 179, 71, 0.5);
+  background: rgba(255, 179, 71, 0.12);
+  color: #ffb347;
+}
+.srv-race-btn:hover {
+  background: rgba(255, 179, 71, 0.25);
+}
+.srv-eye-btn {
+  border: 1px solid rgba(180, 180, 190, 0.4);
+  background: rgba(180, 180, 190, 0.1);
+  color: #9aa1af;
+}
+.srv-eye-btn:hover {
+  background: rgba(180, 180, 190, 0.22);
+}
+.srv-eye-btn.srv-active {
+  border-color: rgba(107, 240, 163, 0.6);
+  background: rgba(107, 240, 163, 0.18);
+  color: #6bf0a3;
+}
+
+/* Wrapper used by injectButton/injectAttemptButtons on every native board
+   row (in-race board, pause-menu board, and the "LEADERBOARD" screen's
+   expanded attempt rows) — each one lays its row out as a CSS grid with a
+   column count matching only its OWN native children, some with the
+   native action button explicitly pinned to a grid-column. This wrapper
+   takes over that native button's original slot (see the injection code's
+   own comment for why), so `grid-column: -1` — "the last column line",
+   valid however many columns a given row actually has — puts it back
+   exactly where that button used to sit, in all three layouts, without
+   needing a different hardcoded column number per board. Grid properties
+   are no-ops if an ancestor row ever turns out not to be a grid at all, so
+   this is harmless applied everywhere rather than scoped per board. */
+.srv-row-actions {
+  grid-column: -1;
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.srv-row-actions .srv-btn-group {
+  margin-left: 0;
+}
+
+/* Both native boards' rows are tighter than our own .srv-board, so the
+   buttons shrink to match rather than overflowing the site's own layout. */
+.srv-row-actions .srv-watch-btn,
+.srv-row-actions .srv-race-btn,
+.srv-row-actions .srv-eye-btn {
+  padding: 1px 6px;
+  font-size: 10px;
+}
+
+/* Compact TrackMania-style leaderboard box — flush against the left edge,
+   slightly above vertical center. */
+/* Matches the native HUD cards' (.hud-card: speed/checkpoint boxes) look —
+   backdrop-blurred translucent dark teal fill, faint white border, same
+   corner radius and drop shadow — rather than the flat opaque panel these
+   used before, so they read as part of the same HUD instead of a
+   third-party overlay bolted on top of it. */
+.srv-board {
+  position: fixed;
+  top: 42vh;
+  left: 0;
+  width: 270px;
+  background: rgba(8, 31, 36, 0.68);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-left: none;
+  border-radius: 0 0.45rem 0.45rem 0;
+  color: #e6e9f0;
+  font-family: sans-serif;
+  z-index: 999998;
+  -webkit-backdrop-filter: blur(0.75rem);
+  backdrop-filter: blur(0.75rem);
+  box-shadow: 0 0.8rem 2rem rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+}
+.srv-board-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  cursor: default;
+}
+.srv-board-title {
+  flex: 1;
+  font-size: 0.54rem;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  color: rgba(255, 248, 233, 0.58);
+}
+.srv-board-refresh,
+.srv-board-collapse {
+  background: transparent;
+  border: none;
+  color: #8a93a6;
+  font-size: 13px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 2px 4px;
+}
+.srv-board-refresh:hover,
+.srv-board-collapse:hover {
+  color: #e6e9f0;
+}
+.srv-board-expand {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 999px;
+  color: #8a93a6;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  line-height: 1;
+  padding: 3px 6px;
+}
+.srv-board-expand:hover {
+  color: #e6e9f0;
+}
+.srv-board-expand.srv-active {
+  border-color: rgba(90, 200, 255, 0.6);
+  background: rgba(90, 200, 255, 0.18);
+  color: #5ac8ff;
+}
+.srv-board-list {
+  max-height: 320px;
+  overflow-y: auto;
+}
+/* "ALL" — take up the full height of the left edge instead of floating at
+   42vh, so there's room to scroll through every ranked time. */
+.srv-board.srv-expanded {
+  top: 0;
+  bottom: 0;
+  border-radius: 0;
+  border-top: none;
+  border-bottom: none;
+  display: flex;
+  flex-direction: column;
+}
+.srv-board.srv-expanded .srv-board-list {
+  max-height: none;
+  flex: 1;
+}
+.srv-board.srv-collapsed .srv-board-list {
+  display: none;
+}
+.srv-board-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  font-size: 11.5px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+.srv-board-row.srv-board-you {
+  background: rgba(90, 200, 255, 0.14);
+}
+.srv-board-row.srv-board-pending {
+  background: rgba(255, 179, 71, 0.16);
+  animation: srv-pending-pulse 1.4s ease-in-out infinite;
+}
+@keyframes srv-pending-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+.srv-board-rank {
+  width: 18px;
+  color: #8a93a6;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+.srv-board-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.srv-board-time {
+  font-variant-numeric: tabular-nums;
+  color: #b7bdca;
+  flex-shrink: 0;
+}
+.srv-board-sep {
+  text-align: center;
+  color: #565d6d;
+  font-size: 11px;
+  padding: 2px 0;
+}
+.srv-board-empty {
+  padding: 10px 8px;
+  font-size: 11.5px;
+  color: #8a93a6;
+}
+.srv-board .srv-btn-group {
+  margin: 0;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.srv-board .srv-watch-btn,
+.srv-board .srv-race-btn,
+.srv-board .srv-eye-btn {
+  padding: 0 6px;
+  font-size: 10px;
+}
+
+/* Live split/checkpoint tracker — flush against the right edge, same
+   vertical position as .srv-board. */
+.srv-splits {
+  position: fixed;
+  top: 42vh;
+  right: 0;
+  width: 240px;
+  background: rgba(8, 31, 36, 0.68);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-right: none;
+  border-radius: 0.45rem 0 0 0.45rem;
+  color: #e6e9f0;
+  font-family: sans-serif;
+  z-index: 999998;
+  -webkit-backdrop-filter: blur(0.75rem);
+  backdrop-filter: blur(0.75rem);
+  box-shadow: 0 0.8rem 2rem rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+}
+.srv-splits-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.srv-splits-title {
+  flex: 1;
+  font-size: 0.54rem;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  color: rgba(255, 248, 233, 0.58);
+}
+.srv-splits-collapse {
+  background: transparent;
+  border: none;
+  color: #8a93a6;
+  font-size: 13px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 2px 4px;
+}
+.srv-splits-list {
+  max-height: 55vh;
+  overflow-y: auto;
+}
+.srv-splits.srv-collapsed .srv-splits-list {
+  display: none;
+}
+.srv-split-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+.srv-split-gate {
+  flex: 1;
+  color: #b7bdca;
+}
+.srv-split-time {
+  color: #8a93a6;
+}
+.srv-split-delta {
+  min-width: 44px;
+  text-align: right;
+}
+.srv-split-speed {
+  min-width: 34px;
+  text-align: right;
+  color: #8a93a6;
+}
+.srv-split-ahead {
+  color: #6bf0a3;
+}
+.srv-split-behind {
+  color: #ff7a7a;
+}
+
+/* Transient checkpoint popup — docked under the site's own big HUD timer
+   (positioned in splits.js). Solid background blocks per line (TrackMania
+   split-mod style) instead of bare text-on-scenery, so it stays readable
+   over any background. Hidden by default; fades in/out via .srv-visible. */
+.srv-split-popup {
+  position: fixed;
+  transform: translateX(-50%);
+  z-index: 999997;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: 220px;
+  font-family: sans-serif;
+  pointer-events: none;
+  opacity: 0;
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+  transition: opacity 0.25s ease;
+}
+.srv-split-popup.srv-visible {
+  opacity: 1;
+}
+.srv-popup-row {
+  padding: 4px 12px;
+  text-align: center;
+}
+.srv-popup-cp {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #e6e9f0;
+  background: rgba(10, 12, 16, 0.55);
+}
+.srv-popup-delta {
+  font-size: 38px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+  color: #fff;
+}
+.srv-popup-delta.srv-split-ahead {
+  background: rgba(31, 174, 99, 0.65);
+}
+.srv-popup-delta.srv-split-behind {
+  background: rgba(209, 59, 59, 0.65);
+}
+.srv-popup-speed {
+  font-size: 14px;
+  font-weight: 700;
+  color: #e6e9f0;
+  background: rgba(10, 12, 16, 0.55);
+}
+
+/* Input analysis panel (watch mode only) — same right edge as .srv-splits
+   but anchored above it (that panel starts at top:42vh) rather than
+   sharing the space, since either could be showing on its own. */
+.srv-input-analysis {
+  position: fixed;
+  top: 8vh;
+  right: 0;
+  width: 240px;
+  max-height: 32vh;
+  display: flex;
+  flex-direction: column;
+  background: rgba(8, 31, 36, 0.68);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-right: none;
+  border-radius: 0.45rem 0 0 0.45rem;
+  color: #e6e9f0;
+  font-family: sans-serif;
+  z-index: 999998;
+  -webkit-backdrop-filter: blur(0.75rem);
+  backdrop-filter: blur(0.75rem);
+  box-shadow: 0 0.8rem 2rem rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+}
+.srv-analysis-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  flex-shrink: 0;
+}
+.srv-analysis-title {
+  flex: 1;
+  font-size: 0.54rem;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  color: rgba(255, 248, 233, 0.58);
+}
+.srv-analysis-collapse {
+  background: transparent;
+  border: none;
+  color: #8a93a6;
+  font-size: 13px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 2px 4px;
+}
+.srv-analysis-body {
+  overflow-y: auto;
+}
+.srv-input-analysis.srv-collapsed .srv-analysis-body {
+  display: none;
+}
+.srv-analysis-dir {
+  padding: 6px 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+.srv-analysis-dir-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #b7bdca;
+  margin-bottom: 4px;
+}
+.srv-analysis-empty {
+  color: #8a93a6;
+  font-style: italic;
+  font-size: 10px;
+}
+.srv-analysis-bucket-title {
+  font-size: 10px;
+  font-weight: 700;
+  color: #8a93a6;
+  margin: 4px 0 2px;
+}
+.srv-analysis-dir > .srv-analysis-bucket-title:first-of-type {
+  margin-top: 0;
+}
+.srv-analysis-bucket-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 10px;
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+  color: #e6e9f0;
+  padding-left: 4px;
+}
+.srv-analysis-bucket-pct {
+  color: #5ac8ff;
+  font-weight: 700;
+}
+.srv-analysis-cps {
+  color: #6bf0a3;
+  font-weight: 700;
+}
+.srv-analysis-respawns .srv-analysis-dir-header {
+  color: #ffb347;
+}
+.srv-analysis-events {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.srv-analysis-respawn-row {
+  font-size: 10px;
+  line-height: 1.6;
+  color: #e6e9f0;
+}
+
+/* Shared wrapper for every spectate-mode overlay (ghost status bar, held-
+   key display, replay scrubber) — one fixed, bottom-centered flex column
+   so the group stacks and stays centered together without each piece
+   needing its own position math. Each child can be a different width
+   (the scrubber is deliberately wider than the key display) and still
+   stays centered, since alignment is the wrapper's job, not theirs.
+   Visual order top-to-bottom is set by each child's own `order` below,
+   independent of which one happens to get built (added to the DOM) first. */
+.srv-spectate-hud {
+  position: fixed;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 999997;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Active in-game ghost status bar */
+/* Matches the native HUD cards' backdrop-blurred translucent look (see
+   .srv-board/.srv-splits) — keeps its own amber accent border since this
+   one is specifically a "not your run" warning, not just informational. */
+.srv-ghost-bar {
+  order: 3; /* bottom-most — closest to the screen edge, as before */
+  display: flex;
+  background: rgba(8, 31, 36, 0.68);
+  border: 1px solid rgba(255, 179, 71, 0.45);
+  border-radius: 999px;
+  color: #e6e9f0;
+  font: 12px sans-serif;
+  padding: 6px 8px 6px 14px;
+  align-items: center;
+  gap: 10px;
+  -webkit-backdrop-filter: blur(0.75rem);
+  backdrop-filter: blur(0.75rem);
+  box-shadow: 0 0.8rem 2rem rgba(0, 0, 0, 0.3);
+}
+.srv-ghost-bar-label {
+  white-space: nowrap;
+}
+
+/* Spectate-mode input overlay: the followed ghost's held keys, live. See
+   the shared grid-area layout rules above (.srv-viewer-hud block) — this
+   HUD has no "boost" key, so its own grid just omits that row. */
+.srv-input-hud {
+  order: 1; /* top-most */
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-areas:
+    ".    fwd  ."
+    "left back right"
+    "hb   hb   hb";
+  gap: 6px;
+  background: rgba(8, 31, 36, 0.68);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 0.45rem;
+  padding: 8px;
+  -webkit-backdrop-filter: blur(0.75rem);
+  backdrop-filter: blur(0.75rem);
+  box-shadow: 0 0.8rem 2rem rgba(0, 0, 0, 0.3);
+}
+.srv-input-hud .srv-hud-key {
+  padding: 6px 0;
+  font-size: 12px;
+}
+/* The 3 direction keys still want a fixed, roughly-square width — only the
+   handbrake key (which spans all 3 grid columns) needs to actually stretch
+   full-width, and a blanket `width` on every .srv-hud-key was overriding
+   the grid's own default stretch behavior for that span. */
+.srv-input-hud .srv-hud-key[data-key="throttle"],
+.srv-input-hud .srv-hud-key[data-key="left"],
+.srv-input-hud .srv-hud-key[data-key="reverse"],
+.srv-input-hud .srv-hud-key[data-key="right"] {
+  width: 40px;
+}
+
+/* Replay progress bar + speed multiplier — its own standalone panel
+   (order: 2, between the keys and the status bar) rather than nested
+   inside .srv-input-hud, specifically so it can be — and is — wider than
+   that panel for finer scrub precision, per feedback that embedding it
+   there capped its width too tightly to be useful. */
+.srv-replay-scrub {
+  order: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 420px;
+  max-width: calc(100vw - 32px);
+  background: rgba(8, 31, 36, 0.68);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 0.45rem;
+  padding: 8px 12px;
+  -webkit-backdrop-filter: blur(0.75rem);
+  backdrop-filter: blur(0.75rem);
+  box-shadow: 0 0.8rem 2rem rgba(0, 0, 0, 0.3);
+}
+.srv-scrub-label {
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: #8a93a6;
+  text-align: center;
+}
+.srv-scrub-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.srv-scrub-slider {
+  flex: 1;
+  min-width: 0;
+  accent-color: #5ac8ff;
+  cursor: pointer;
+}
+.srv-scrub-speed {
+  flex-shrink: 0;
+  background: rgba(90, 200, 255, 0.12);
+  border: 1px solid rgba(90, 200, 255, 0.5);
+  color: #5ac8ff;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 4px;
+  cursor: pointer;
+}
+
+/* Live gear viewer: your own current gear, shown while driving, as a
+   TrackMania-style rev bar sitting just to the left of the site's own
+   speed readout, matching that readout's own height and card styling
+   (.hud-card: backdrop-blur, translucent dark fill, subtle border,
+   rounded corners, soft drop shadow). Positioned to match that readout's
+   own coordinate system (.race-hud's `inset: 5.4rem clamp(1rem,3vw,3rem)
+   1.5rem` / .speed-card's `bottom:0;right:0`, widest at
+   `[data-digits="3"]` -> 7.25rem) rather than a fixed pixel offset, so it
+   tracks the same responsive positioning and never overlaps even when the
+   speed box widens for 3-digit speeds. Now a long horizontal bar (was a
+   narrow vertical one) — the number sits in a fixed-width cell on the
+   left, the fill bar takes the rest of the width and fills left-to-right. */
+.srv-gear-hud {
+  position: fixed;
+  bottom: 1.5rem;
+  right: calc(clamp(1rem, 3vw, 3rem) + 7.25rem + 0.5rem);
+  z-index: 999997;
+  display: none;
+  flex-direction: row;
+  align-items: stretch;
+  width: 13rem;
+  height: 5.75rem;
+  gap: 0.5rem;
+  padding: 0.55rem;
+  background: rgba(8, 31, 36, 0.68);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 0.45rem;
+  -webkit-backdrop-filter: blur(0.75rem);
+  backdrop-filter: blur(0.75rem);
+  box-shadow: 0 0.8rem 2rem rgba(0, 0, 0, 0.17);
+  font-family: sans-serif;
+  box-sizing: border-box;
+}
+.srv-gear-hud-number {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.6rem;
+  color: #e6e9f0;
+  font-size: 2.4rem;
+  font-weight: 700;
+  line-height: 1;
+  transition: color 0.1s ease;
+}
+.srv-gear-hud.srv-gear-hud-shifting .srv-gear-hud-number {
+  color: #ffb347;
+}
+.srv-gear-hud-track {
+  position: relative;
+  flex: 1 1 auto;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 0.35rem;
+  overflow: hidden;
+}
+.srv-gear-hud-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 0%;
+  background: #3ddc6b;
+  transition: width 0.06s linear, background-color 0.12s ease;
+}
+.srv-gear-hud-fill.srv-gear-hud-fill-hot {
+  background: #ff4d4d;
+}
+
+/* Replay viewer modal */
+.srv-viewer-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  z-index: 1000000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: sans-serif;
+}
+.srv-viewer-panel {
+  background: #191c24;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 16px;
+  width: 1000px;
+  max-width: 96vw;
+  color: #e6e9f0;
+}
+.srv-viewer-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+.srv-viewer-badge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #ffb347;
+  border: 1px solid rgba(255, 179, 71, 0.5);
+  background: rgba(255, 179, 71, 0.1);
+  border-radius: 999px;
+  padding: 3px 8px;
+  flex-shrink: 0;
+}
+.srv-viewer-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 15px;
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+.srv-viewer-title strong {
+  overflow-wrap: anywhere;
+}
+.srv-viewer-runid {
+  color: #8a93a6;
+  font-size: 11px;
+  overflow-wrap: anywhere;
+}
+.srv-viewer-close {
+  background: transparent;
+  border: none;
+  color: #8a93a6;
+  font-size: 20px;
+  cursor: pointer;
+  line-height: 1;
+  flex-shrink: 0;
+}
+.srv-viewer-canvas {
+  width: 100%;
+  height: 560px;
+  border-radius: 8px;
+  display: block;
+  background: #12151c;
+}
+/* Keyboard-style input cluster, shared by the live spectate overlay
+   (.srv-input-hud) and the 2D fallback viewer (.srv-viewer-hud): forward
+   sits above back (an inverted-T, like the actual arrow-key cluster),
+   left/back/right form the middle row, and handbrake spans the full
+   3-column width beneath it. Placement is by grid-area (keyed off each
+   key's data-key), not DOM order, so it doesn't matter what order
+   INPUT_HUD_KEYS/INPUT_LABELS list the keys in. */
+.srv-viewer-hud {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-areas:
+    ".    fwd  ."
+    "left back right"
+    "hb   hb   hb"
+    "boost boost boost";
+  gap: 6px;
+  margin-top: 10px;
+}
+/* Styled as actual keycaps — a raised bezel (top-edge highlight + a
+   "wall" shadow beneath, as if the key has physical height) that flattens
+   and sinks down when active, like a real key being pressed, rather than
+   a flat grid tile just changing color. */
+.srv-hud-key {
+  text-align: center;
+  padding: 8px 0;
+  border-radius: 5px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02));
+  color: #7a8296;
+  font-weight: 700;
+  font-size: 13px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 2px 0 rgba(0, 0, 0, 0.45), 0 3px 4px rgba(0, 0, 0, 0.25);
+  transform: translateY(0);
+  transition: background 0.05s ease, color 0.05s ease, border-color 0.05s ease, box-shadow 0.05s ease,
+    transform 0.05s ease;
+}
+.srv-hud-key[data-key="throttle"] { grid-area: fwd; }
+.srv-hud-key[data-key="left"] { grid-area: left; }
+.srv-hud-key[data-key="reverse"] { grid-area: back; }
+.srv-hud-key[data-key="right"] { grid-area: right; }
+.srv-hud-key[data-key="handbrake"] { grid-area: hb; }
+.srv-hud-key[data-key="boost"] { grid-area: boost; }
+.srv-hud-key.active {
+  background: linear-gradient(180deg, #6ad0ff, #4bb8ee);
+  color: #0b0d12;
+  border-color: #5ac8ff;
+  /* Bottom "wall" shadow removed and an inset shadow added instead — the
+     key looks like it's sunk down to meet the panel, not just recolored. */
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+  transform: translateY(2px);
+}
+.srv-hud-key[data-key="boost"].active {
+  background: linear-gradient(180deg, #ffc169, #ffa733);
+  border-color: #ffb347;
+}
+.srv-viewer-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+.srv-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #e6e9f0;
+  border-radius: 6px;
+  padding: 5px 10px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.srv-speed {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #e6e9f0;
+  border-radius: 6px;
+  padding: 5px;
+  font-size: 12px;
+}
+.srv-scrub {
+  flex: 1;
+}
+.srv-time {
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  color: #8a93a6;
+  white-space: nowrap;
+}
+
+/* ---- HUD element master show/hide toggles (Swervle Utils menu) ----
+   !important is load-bearing here: several of these elements have their own
+   display-toggling logic running constantly (the gear HUD flips every
+   tick, the watch-controls pieces toggle on entering/leaving watch mode),
+   which would otherwise fight a plain inline-style hide. */
+html.srv-hide-leaderboard .srv-board,
+html.srv-hide-splits .srv-splits,
+html.srv-hide-input-analysis .srv-input-analysis,
+html.srv-hide-watch-controls .srv-spectate-hud,
+html.srv-hide-gear-hud .srv-gear-hud,
+html.srv-hide-own-input-hud .srv-own-input-hud {
+  display: none !important;
+}
+
+/* Live input-key overlay for your OWN driving (see buildOwnInputHud) — same
+   diamond layout as the replay-watching key display, but with no wrapping
+   panel/background of its own; each key instead gets its own card, styled
+   to match .srv-gear-hud (dark blurred backdrop, not the replay HUD's
+   raised-keycap gradient look). */
+.srv-own-input-hud {
+  position: fixed;
+  bottom: 1.5rem;
+  left: clamp(1rem, 3vw, 3rem);
+  z-index: 999997;
+  display: none;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-areas:
+    ".    fwd  ."
+    "left back right"
+    "hb   hb   hb";
+  gap: 6px;
+  width: 9rem;
+}
+.srv-own-hud-key {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.9rem;
+  background: rgba(8, 31, 36, 0.68);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 0.45rem;
+  -webkit-backdrop-filter: blur(0.75rem);
+  backdrop-filter: blur(0.75rem);
+  box-shadow: 0 0.8rem 2rem rgba(0, 0, 0, 0.17);
+  color: #7a8296;
+  font-weight: 700;
+  font-size: 13px;
+  box-sizing: border-box;
+  transition: background 0.05s ease, color 0.05s ease, border-color 0.05s ease;
+}
+.srv-own-hud-key[data-key="throttle"] { grid-area: fwd; }
+.srv-own-hud-key[data-key="left"] { grid-area: left; }
+.srv-own-hud-key[data-key="reverse"] { grid-area: back; }
+.srv-own-hud-key[data-key="right"] { grid-area: right; }
+.srv-own-hud-key[data-key="handbrake"] { grid-area: hb; }
+.srv-own-hud-key.active {
+  background: rgba(90, 200, 255, 0.22);
+  border-color: #5ac8ff;
+  color: #e6e9f0;
+}
+
+/* "Swervle Utils" button, injected into the site's own settings modal */
+.srv-open-utils-btn {
+  margin-top: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  background: #5ac8ff;
+  border: 1px solid #8adcff;
+  border-radius: 6px;
+  color: #0b0f14;
+  font: 800 12px sans-serif;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(90, 200, 255, 0.35);
+}
+.srv-open-utils-btn:hover {
+  background: #7ad4ff;
+}
+
+/* Swervle Utils menu — modeled on .srv-viewer-overlay/.srv-viewer-panel */
+.srv-utils-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  z-index: 1000000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: sans-serif;
+}
+.srv-utils-panel {
+  background: #191c24;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 16px;
+  width: 360px;
+  max-width: 92vw;
+  max-height: 85vh;
+  overflow-y: auto;
+  color: #e6e9f0;
+}
+.srv-utils-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  font-size: 14px;
+}
+.srv-utils-close {
+  background: transparent;
+  border: none;
+  color: #8a93a6;
+  font-size: 18px;
+  cursor: pointer;
+  line-height: 1;
+}
+.srv-utils-close:hover {
+  color: #e6e9f0;
+}
+.srv-utils-section {
+  margin-bottom: 14px;
+}
+.srv-utils-section-title {
+  font-size: 0.6rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  color: rgba(255, 248, 233, 0.58);
+  margin-bottom: 6px;
+}
+.srv-utils-hud-toggles .srv-setting-label,
+.srv-utils-driving-toggles .srv-setting-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 0;
+  font-size: 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.srv-utils-hud-editor-btn {
+  width: 100%;
+  margin-top: 4px;
+}
+.srv-utils-hint {
+  margin-top: 10px;
+  font-size: 11px;
+  color: #8a93a6;
+}
+
+/* HUD editor overlay — pointer-events off everywhere except the toolbar and
+   the per-element drag/resize handles, so the game underneath stays
+   interactive (e.g. to actually start watching a replay) while editing. */
+.srv-hud-editor-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000002;
+  pointer-events: none;
+  font-family: sans-serif;
+}
+.srv-hud-editor-toolbar {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #191c24;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  padding: 8px 14px;
+  color: #e6e9f0;
+  font-size: 12px;
+  box-shadow: 0 0.8rem 2rem rgba(0, 0, 0, 0.4);
+  z-index: 1000003;
+}
+.srv-hud-editor-hint {
+  color: #8a93a6;
+}
+.srv-hud-editor-handle {
+  position: fixed;
+  pointer-events: auto;
+  box-sizing: border-box;
+  border: 2px dashed rgba(90, 200, 255, 0.85);
+  border-radius: 6px;
+  background: rgba(90, 200, 255, 0.08);
+  cursor: move;
+  touch-action: none;
+}
+.srv-hud-editor-handle-label {
+  position: absolute;
+  top: -20px;
+  left: 0;
+  background: rgba(90, 200, 255, 0.9);
+  color: #0b0f14;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}

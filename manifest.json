@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "Swervle Utils",
+  "version": "1.2",
+  "description": "A clientside extension with some basic quality of life improvements.",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "permissions": ["declarativeNetRequest", "storage"],
+  "host_permissions": ["https://swervle.com/*", "https://raw.githubusercontent.com/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Swervle Utils — badge shows patch-sync status (blank = ok, ! = some patches skipped upstream, X = couldn't reach GitHub)"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://swervle.com/*"],
+      "js": ["srv-main.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["https://swervle.com/*"],
+      "js": ["bridge.js", "decoder.js", "api.js", "viewer.js", "splits.js", "content.js"],
+      "css": ["styles.css"],
+      "run_at": "document_idle"
+    }
+  ]
+}
