@@ -105,13 +105,13 @@ export function deriveIdentifiers(mainSrc, mainRawSrc) {
   const names = {};
 
   {
-    const m = mainSrc.match(/new ([A-Za-z0-9_$]+)\(\{modifiers:this\.(#[A-Za-z0-9_]+),presentationRaycastEmulation:/);
+    const m = mainSrc.match(/new ([A-Za-z0-9_$]+)\(\{modifiers:this\.(#[A-Za-z0-9_$]+),presentationRaycastEmulation:/);
     names.RV = m?.[1] ?? null;
     names.physicsModifiers = m?.[2] ?? null;
   }
   {
     const m = mainSrc.match(
-      /new ([A-Za-z0-9_$]+)\(\{appearance:([A-Za-z0-9_$]+),assetInstance:await this\.(#[A-Za-z0-9_]+)\.instantiate\(([A-Za-z0-9_$]+)\),definition:([A-Za-z0-9_$]+),entityId:[^,]+,materialColorOverrides:([A-Za-z0-9_$]+),materialRegistrar:this\.(#[A-Za-z0-9_]+)\.materialRegistrar\}\)/
+      /new ([A-Za-z0-9_$]+)\(\{appearance:([A-Za-z0-9_$]+),assetInstance:await this\.(#[A-Za-z0-9_$]+)\.instantiate\(([A-Za-z0-9_$]+)\),definition:([A-Za-z0-9_$]+),entityId:[^,]+,materialColorOverrides:([A-Za-z0-9_$]+),materialRegistrar:this\.(#[A-Za-z0-9_$]+)\.materialRegistrar\}\)/
     );
     names.VD = m?.[1] ?? null;
     names.ghostAppearance = m?.[2] ?? null;
@@ -130,23 +130,23 @@ export function deriveIdentifiers(mainSrc, mainRawSrc) {
   }
   {
     const m = mainSrc.match(
-      /get active\(\)\{return this\.(#[A-Za-z0-9_]+)\}start\(\)\{this\.(#[A-Za-z0-9_]+)\|\|this\.\1\|\|\(this\.clear\(\),this\.\1=!0\)\}/
+      /get active\(\)\{return this\.(#[A-Za-z0-9_$]+)\}start\(\)\{this\.(#[A-Za-z0-9_$]+)\|\|this\.\1\|\|\(this\.clear\(\),this\.\1=!0\)\}/
     );
     names.keyboardActive = m?.[1] ?? null;
     names.keyboardDisposed = m?.[2] ?? null;
     const m2 = mainSrc.match(
-      /sample\(e=!0\)\{let t=\{edges:this\.(#[A-Za-z0-9_]+)\.map\(e=>\(\{\.\.\.e\}\)\),held:Object\.fromEntries\(this\.#[A-Za-z0-9_]+\)\}/
+      /sample\(e=!0\)\{let t=\{edges:this\.(#[A-Za-z0-9_$]+)\.map\(e=>\(\{\.\.\.e\}\)\),held:Object\.fromEntries\(this\.#[A-Za-z0-9_$]+\)\}/
     );
     names.keyboardEdges = m2?.[1] ?? null;
   }
   {
     const m = mainSrc.match(
-      /let ([A-Za-z0-9_$]+)=this\.(#[A-Za-z0-9_]+);[A-Za-z0-9_$]+\(`scene-precompile`,\(\)=>\{[A-Za-z0-9_$]+\.precompile\(\1\.camera\)\}\)/
+      /let ([A-Za-z0-9_$]+)=this\.(#[A-Za-z0-9_$]+);[A-Za-z0-9_$]+\(`scene-precompile`,\(\)=>\{[A-Za-z0-9_$]+\.precompile\(\1\.camera\)\}\)/
     );
     names.cameraController = m?.[2] ?? null;
   }
   {
-    const m = mainSrc.match(/gateCount:this\.(#[A-Za-z0-9_]+)\?\.track\.gates\.length/);
+    const m = mainSrc.match(/gateCount:this\.(#[A-Za-z0-9_$]+)\?\.track\.gates\.length/);
     names.raceManifest = m?.[1] ?? null;
   }
   {
@@ -199,7 +199,7 @@ export function patchMainBundle(mainSrc, mainRawSrc, names, origin, results, log
   ) {
     mainPatcher.insertAfter(
       "expose-ready-ingredients",
-      /this\.#[A-Za-z0-9_]+\.rivalGap=new [A-Za-z0-9_$]+\(i\.track\.routeLine\)\}catch\(n\)\{throw t\?\.dispose\(\),e\.dispose\(\),n\}\}/,
+      /this\.#[A-Za-z0-9_$]+\.rivalGap=new [A-Za-z0-9_$]+\(i\.track\.routeLine\)\}catch\(n\)\{throw t\?\.dispose\(\),e\.dispose\(\),n\}\}/,
       () =>
         "window.__srv=window.__srv||{};" +
         `window.__srv.ready={RV:${names.RV},GL:${names.GL},VD:${names.VD},appearance:${names.ghostAppearance},` +
@@ -220,7 +220,7 @@ export function patchMainBundle(mainSrc, mainRawSrc, names, origin, results, log
   if (names.raceManifest) {
     mainPatcher.insertAfter(
       "onTick",
-      /[A-Za-z0-9_$]+=[A-Za-z0-9_$]+\(this\.#[A-Za-z0-9_]+\),[A-Za-z0-9_$]+=this\.#[A-Za-z0-9_]+\.profile\.hudUpdateTickInterval;/,
+      /[A-Za-z0-9_$]+=[A-Za-z0-9_$]+\(this\.#[A-Za-z0-9_$]+\),[A-Za-z0-9_$]+=this\.#[A-Za-z0-9_$]+\.profile\.hudUpdateTickInterval;/,
       () =>
         "try{window.__srv?.onTick?.({tick:s,nextGateIndex:a.nextGateIndex," +
         `gateCount:this.${names.raceManifest}?.track.gates.length??0,speed:c.speed,position:c.position,phase:a.phase,` +
@@ -234,7 +234,7 @@ export function patchMainBundle(mainSrc, mainRawSrc, names, origin, results, log
   if (names.cameraController) {
     mainPatcher.insertAfter(
       "onRender",
-      /this\.#[A-Za-z0-9_]+\.rival\?\.updateNameplate\(n\.camera\),this\.#[A-Za-z0-9_]+\.pbGhost\?\.updateNameplate\(n\.camera\),this\.#[A-Za-z0-9_]+\.teamFieldView\?\.updateNameplates\(n\.camera\);/,
+      /this\.#[A-Za-z0-9_$]+\.rival\?\.updateNameplate\(n\.camera\),this\.#[A-Za-z0-9_$]+\.pbGhost\?\.updateNameplate\(n\.camera\),this\.#[A-Za-z0-9_$]+\.teamFieldView\?\.updateNameplates\(n\.camera\);/,
       () =>
         `try{window.__srv?.onRender?.({alpha:e.alpha,playerPosition:i.position,camera:this.${names.cameraController}.camera});}catch(e){console.error(e);}`
     );
@@ -252,12 +252,12 @@ export function patchMainBundle(mainSrc, mainRawSrc, names, origin, results, log
   // 8. Pause-suppression flag.
   mainPatcher.replaceOnce(
     "suppressPauseOnBlur",
-    /(#[A-Za-z0-9_]+=\(\)=>\{this\.#[A-Za-z0-9_]+=!1,!this\.#[A-Za-z0-9_]+&&this\.#[A-Za-z0-9_]+\.isEmpty&&)(this\.#[A-Za-z0-9_]+\(`focus-lost`\)\};)/,
+    /(#[A-Za-z0-9_$]+=\(\)=>\{this\.#[A-Za-z0-9_$]+=!1,!this\.#[A-Za-z0-9_$]+&&this\.#[A-Za-z0-9_$]+\.isEmpty&&)(this\.#[A-Za-z0-9_$]+\(`focus-lost`\)\};)/,
     (m) => `${m[1]}!window.__srvSuppressPause&&${m[2]}`
   );
   mainPatcher.replaceOnce(
     "suppressPauseOnPointerLockLoss",
-    /(!\(r\|\|!t\|\|!n\|\|(?:this\.#[A-Za-z0-9_]+!==null|!this\.#[A-Za-z0-9_]+\.isEmpty))(\)&&(?:this\.#[A-Za-z0-9_]+\(\)|\(this\.#[A-Za-z0-9_]+=performance\.now\(\)\+250,this\.#[A-Za-z0-9_]+\(\)\)))\};/,
+    /(!\(r\|\|!t\|\|!n\|\|(?:this\.#[A-Za-z0-9_$]+!==null|!this\.#[A-Za-z0-9_$]+\.isEmpty))(\)&&(?:this\.#[A-Za-z0-9_$]+\(\)|\(this\.#[A-Za-z0-9_$]+=performance\.now\(\)\+250,this\.#[A-Za-z0-9_$]+\(\)\)))\};/,
     (m) => `${m[1]}||window.__srvSuppressPause${m[2]}};`
   );
 
@@ -275,14 +275,14 @@ export function patchMainBundle(mainSrc, mainRawSrc, names, origin, results, log
   }
   mainPatcher.replaceOnce(
     "keyboardHeldStateSurvivesRestart_explicitClear",
-    /(this\.#[A-Za-z0-9_]+\?\.reset\(\)),this\.#[A-Za-z0-9_]+\?\.clear\(\),(this\.#[A-Za-z0-9_]+\(!1\),this\.#[A-Za-z0-9_]+\.reset\(\))/,
+    /(this\.#[A-Za-z0-9_$]+\?\.reset\(\)),this\.#[A-Za-z0-9_$]+\?\.clear\(\),(this\.#[A-Za-z0-9_$]+\(!1\),this\.#[A-Za-z0-9_$]+\.reset\(\))/,
     (m) => `${m[1]},${m[2]}`
   );
 
   // 10. Camera-mode cycle.
   mainPatcher.replaceOnce(
     "cameraModeCycle",
-    /if\(e\.code===`KeyC`&&!e\.repeat&&this\.(#[A-Za-z0-9_]+)===null\)\{e\.preventDefault\(\),this\.(#[A-Za-z0-9_]+)\.toggleCameraLock\(\);return\}/,
+    /if\(e\.code===`KeyC`&&!e\.repeat&&this\.(#[A-Za-z0-9_$]+)===null\)\{e\.preventDefault\(\),this\.(#[A-Za-z0-9_$]+)\.toggleCameraLock\(\);return\}/,
     (m) =>
       `if(e.code===\`KeyC\`&&!e.repeat&&this.${m[1]}===null){e.preventDefault();` +
       `let __v=this.${m[2]},__m=[[!0,!1]];` +
