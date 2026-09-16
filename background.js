@@ -39,6 +39,7 @@ const STATE_URL = `${RAW_BASE}/state.json`;
 const CDN_BASE = `https://cdn.jsdelivr.net/gh/${GITHUB_OWNER}/${GITHUB_REPO}@${GITHUB_BRANCH}`;
 const MAIN_RULE_ID = 1;
 const TV_RULE_ID = 2;
+const CSP_RULE_ID = 3;
 
 // Same wildcard-by-hash-prefix approach the original (pre-self-patch)
 // static rules.json used: a pure hash-bump redeploy with no code changes
@@ -108,6 +109,41 @@ function syncRules() {
   return inFlightSync;
 }
 
+// swervle.com's own CSP sends a `script-src` allowlist (its origin plus
+// specific ad/analytics/Cloudflare domains) that includes neither
+// cdn.jsdelivr.net nor raw.githubusercontent.com — confirmed directly from
+// a real "Refused to load the script ... violates ... Content-Security-
+// Policy" console error. That's the browser doing exactly what CSP is for;
+// the redirect rules above substitute a different URL for the real one,
+// but the resulting request still has to clear the page's own CSP
+// afterward, and this site's does not allow either of the domains this
+// extension redirects to. Since MV3 gives extensions no way to rewrite a
+// response BODY (only headers/redirects), stripping the CSP header on the
+// swervle.com document itself is the only available lever. This does trade
+// away whatever XSS protection that header was providing on swervle.com —
+// acceptable for a personal extension the user already trusts to rewrite
+// the site's own code wholesale, but worth knowing it's happening.
+//
+// This rule is static (never depends on state.json), so it's registered
+// once and left alone — unlike MAIN_RULE_ID/TV_RULE_ID, syncRules() never
+// touches CSP_RULE_ID on later runs.
+function ensureCspRuleRegistered() {
+  return chrome.declarativeNetRequest.updateDynamicRules({
+    removeRuleIds: [CSP_RULE_ID],
+    addRules: [
+      {
+        id: CSP_RULE_ID,
+        priority: 1,
+        action: {
+          type: "modifyHeaders",
+          responseHeaders: [{ header: "content-security-policy", operation: "remove" }],
+        },
+        condition: { urlFilter: "||swervle.com/", resourceTypes: ["main_frame"] },
+      },
+    ],
+  });
+}
+
 function setBadge(status) {
   const text = { ok: "", warn: "!", error: "X" }[status] ?? "";
   chrome.action?.setBadgeText?.({ text });
@@ -174,8 +210,14 @@ async function checkForNewRelease() {
   }
 }
 
-chrome.runtime.onInstalled.addListener(() => syncRules());
-chrome.runtime.onStartup.addListener(() => syncRules());
+chrome.runtime.onInstalled.addListener(() => {
+  ensureCspRuleRegistered();
+  syncRules();
+});
+chrome.runtime.onStartup.addListener(() => {
+  ensureCspRuleRegistered();
+  syncRules();
+});
 
 // content.js (isolated world, has chrome.runtime access — unlike srv-main.js
 // which runs in the page's own MAIN world) reports the live page's actual
