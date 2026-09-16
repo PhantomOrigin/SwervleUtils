@@ -210,14 +210,24 @@ async function checkForNewRelease() {
   }
 }
 
-chrome.runtime.onInstalled.addListener(() => {
-  ensureCspRuleRegistered();
-  syncRules();
-});
-chrome.runtime.onStartup.addListener(() => {
-  ensureCspRuleRegistered();
-  syncRules();
-});
+// Sequential, not fire-and-forget — both call updateDynamicRules(), and
+// firing them concurrently let one call's remove/add pair race the other's,
+// which could throw and leave syncRules() reporting `ok:false` (and
+// therefore this page load's patch state as permanently "stale") even
+// though the CSP rule itself still registered fine and the game was
+// actually working the whole time. Awaiting the CSP rule first, before
+// syncRules() ever touches the ruleset, removes the race entirely.
+async function initializeRules() {
+  try {
+    await ensureCspRuleRegistered();
+  } catch (err) {
+    console.error("[srv] failed to register CSP-strip rule:", err);
+  }
+  await syncRules();
+}
+
+chrome.runtime.onInstalled.addListener(() => initializeRules());
+chrome.runtime.onStartup.addListener(() => initializeRules());
 
 // content.js (isolated world, has chrome.runtime access — unlike srv-main.js
 // which runs in the page's own MAIN world) reports the live page's actual
