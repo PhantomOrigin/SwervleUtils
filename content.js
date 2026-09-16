@@ -59,7 +59,7 @@
   // the screen in the next few seconds (e.g. bundle-staleness, below),
   // where a toast that quietly vanishes after 6s defeats the point of
   // warning at all.
-  function showToast(text, isError, persistent) {
+  function showToast(text, isError, persistent, linkUrl, linkText) {
     const el = document.createElement("div");
     el.style.cssText = `
       position:fixed; bottom:16px; left:50%; transform:translateX(-50%);
@@ -70,6 +70,15 @@
     const textEl = document.createElement("span");
     textEl.textContent = text;
     el.appendChild(textEl);
+    if (linkUrl) {
+      const link = document.createElement("a");
+      link.href = linkUrl;
+      link.textContent = linkText ?? "Open";
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.style.cssText = "color:#6bb7ff; text-decoration:underline; white-space:nowrap;";
+      el.appendChild(link);
+    }
     if (persistent) {
       const closeBtn = document.createElement("button");
       closeBtn.textContent = "×";
@@ -1716,16 +1725,37 @@
       const liveMainFilename = document.querySelector('script[type="module"][src*="/assets/"]')?.src?.split("/").pop();
       if (!liveMainFilename) return;
       chrome.runtime.sendMessage({ type: "srv:pageLoaded", liveMainFilename }, (response) => {
-        if (chrome.runtime.lastError || !response?.staleOnLoad) return;
-        // Persistent, not the usual auto-dismissing toast: this can break
-        // almost anything unpredictably (past examples: ghosts, splits,
-        // checkpoint markers, even unrelated-looking things like Restart
-        // silently failing) — a toast that quietly disappears after 6
-        // seconds defeats the entire point of surfacing it. Deliberately
-        // just a plain "refresh" instruction rather than auto-reloading:
-        // simpler, and never risks reloading out from under the player at
-        // a bad moment.
-        showToast("Swervle Utils is outdated for this page — please refresh.", true, true);
+        if (chrome.runtime.lastError || !response) return;
+
+        if (response.staleOnLoad) {
+          // Persistent, not the usual auto-dismissing toast: this can break
+          // almost anything unpredictably (past examples: ghosts, splits,
+          // checkpoint markers, even unrelated-looking things like Restart
+          // silently failing) — a toast that quietly disappears after 6
+          // seconds defeats the entire point of surfacing it. Deliberately
+          // just a plain "refresh" instruction rather than auto-reloading:
+          // simpler, and never risks reloading out from under the player at
+          // a bad moment.
+          showToast("Swervle Utils is outdated for this page — please refresh.", true, true);
+        }
+
+        // Independent of the above — this is about the EXTENSION PACKAGE
+        // itself (content.js, background.js, manifest.json, actual
+        // features) being out of date, which nothing here can fix
+        // automatically: a zip-and-Load-unpacked install has no update
+        // mechanism at all (Chrome permanently disables update-checking
+        // for unpacked extensions). All this can do is tell the player a
+        // newer build exists on GitHub and point them at it.
+        if (response.updateNotice) {
+          const { latestVersion, currentVersion, releaseUrl } = response.updateNotice;
+          showToast(
+            `A new Swervle Utils version is available (v${latestVersion}, you have v${currentVersion}).`,
+            false,
+            true,
+            releaseUrl,
+            "Get it"
+          );
+        }
       });
     } catch {}
   }
