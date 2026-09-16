@@ -1016,6 +1016,40 @@
   // players' new times show up without you having to ask.
   const AUTO_REFRESH_MS = 20000;
 
+  // ---- locally-remembered PB, per dailyId — a fallback for when the live
+  // getAccountRuns() fetch fails (confirmed to happen: swervle's own API
+  // has returned 500/503 intermittently), which otherwise makes your own
+  // row silently disappear from the board — even though your PB is still
+  // sitting right there in lastEntries, fetched independently via
+  // getLeaderboard() moments earlier in the exact same call. Only ever
+  // stores a pointer (which publicRunId is yours for a given day), never
+  // rank/time — those always come fresh from lastEntries, so there's no
+  // staleness risk in what gets DISPLAYED, only in "which row is mine"
+  // when the live lookup can't say. ----
+  const PB_CACHE_PREFIX = "srv-pb-";
+  const PB_CACHE_MAX_ENTRIES = 60; // ~2 months of daily plays — bounds storage growth, not a hard limit that matters
+
+  function rememberOwnPb(dailyId, publicRunId) {
+    try {
+      localStorage.setItem(PB_CACHE_PREFIX + dailyId, publicRunId);
+      // dailyId is a sortable ISO-ish date string ("2026-09-16"), so a
+      // plain lexicographic sort already orders cache keys oldest-first —
+      // no separate write-order index needed to know which to evict.
+      const keys = Object.keys(localStorage)
+        .filter((k) => k.startsWith(PB_CACHE_PREFIX))
+        .sort();
+      for (let i = 0; i < keys.length - PB_CACHE_MAX_ENTRIES; i++) localStorage.removeItem(keys[i]);
+    } catch {}
+  }
+
+  function recallOwnPb(dailyId) {
+    try {
+      return localStorage.getItem(PB_CACHE_PREFIX + dailyId);
+    } catch {
+      return null;
+    }
+  }
+
   async function loadBoard() {
     if (!boardListEl) return;
     // Deliberately doesn't blank the list first — the old data (or a
@@ -1057,6 +1091,18 @@
           const best = eligibleToday.reduce((a, b) => (a.durationTicks <= b.durationTicks ? a : b));
           lastYourEntry = lastEntries.find((e) => e.publicRunId === best.publicRunId) || null;
         }
+      }
+      if (lastYourEntry) {
+        rememberOwnPb(dailyId, lastYourEntry.publicRunId);
+      } else {
+        // The live account-runs lookup above didn't turn up today's PB —
+        // fall back to whichever run was last confirmed as yours for this
+        // exact day. lastEntries came back fine regardless (a separate,
+        // independent fetch a few lines up), so the rank/time this ends up
+        // showing is always current; only "which row is yours" ever comes
+        // from the cache.
+        const cachedRunId = recallOwnPb(dailyId);
+        if (cachedRunId) lastYourEntry = lastEntries.find((e) => e.publicRunId === cachedRunId) || null;
       }
 
       pendingResult = null; // real data has arrived — stop overlaying the guess
