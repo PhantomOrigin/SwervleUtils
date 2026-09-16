@@ -261,7 +261,42 @@ export function patchMainBundle(mainSrc, mainRawSrc, names, origin, results, log
     (m) => `${m[1]}||window.__srvSuppressPause${m[2]}};`
   );
 
-  // 9. Keyboard-held-state-survives-restart fix.
+  // 9. Keyboard-held-state-survives-restart fix. Confirmed by reading the
+  //    keyboard tracker class's actual source (not just guessing from
+  //    symptoms) that its "currently held" state (a private Map, separate
+  //    from the per-tick edges queue) is a per-key boolean updated only by
+  //    real keydown/keyup DOM events — nothing needs to "restore" it across
+  //    a restart, since the physical key was never released; the bug is
+  //    entirely that THREE independent call sites explicitly wipe that
+  //    state, none of which have any real reason to on an in-place retry
+  //    (as opposed to actually leaving the race):
+  //      a) start() unconditionally calls this.clear() (which resets BOTH
+  //         the edges queue AND the held-state map) in its guard against
+  //         double-starting — called every restart via this.#Oe?.start().
+  //         Fixed by only resetting the edges queue.
+  //      b) The retry routine (#nn(), found via searching for the site's
+  //         literal `retry` telemetry-event string) calls
+  //         this.#Oe?.stop() with NO ARGUMENT before the reset sequence —
+  //         its signature is `stop(e=!1){this.#a&&(this.#a=!1,e?
+  //         this.#f():this.clear())}`, so a bare call defaults `e` to
+  //         false and therefore ALSO calls this.clear() internally. This
+  //         is the site that was missed entirely on the first pass at this
+  //         fix — (c) below was independently deleted, but this earlier
+  //         call was still wiping the exact same state moments before (c)
+  //         even ran, which is why the original fix never actually worked
+  //         despite both then-known culprits being patched.
+  //      c) The same retry routine ALSO calls this.#Oe?.clear() directly
+  //         and explicitly, a second time, independent of both (a) and (b).
+  //    (b) and (c) are fixed together in one patch below, since they sit a
+  //    bounded, known distance apart in the exact same retry sequence —
+  //    anchoring them jointly (rather than as two independent wildcarded
+  //    matches that merely happen to be positionally adjacent) means the
+  //    combined pattern is what's actually verified unique in the file,
+  //    not each half separately. Deliberately does NOT touch the other two
+  //    places in the bundle with the exact same `?.stop(),?.stop()` shape
+  //    (matched, then rejected, during derivation) — those aren't the
+  //    in-place-retry path and this has no evidence they should behave the
+  //    same way.
   if (names.keyboardActive && names.keyboardDisposed && names.keyboardEdges) {
     mainPatcher.replaceOnce(
       "keyboardHeldStateSurvivesRestart_startClear",
@@ -274,9 +309,14 @@ export function patchMainBundle(mainSrc, mainRawSrc, names, origin, results, log
     mainPatcher.skip("keyboardHeldStateSurvivesRestart_startClear", "keyboard input tracker fields could not be derived");
   }
   mainPatcher.replaceOnce(
-    "keyboardHeldStateSurvivesRestart_explicitClear",
-    /(this\.#[A-Za-z0-9_$]+\?\.reset\(\)),this\.#[A-Za-z0-9_$]+\?\.clear\(\),(this\.#[A-Za-z0-9_$]+\(!1\),this\.#[A-Za-z0-9_$]+\.reset\(\))/,
-    (m) => `${m[1]},${m[2]}`
+    "keyboardHeldStateSurvivesRestart_retrySequence",
+    /(this\.#[A-Za-z0-9_$]+\?\.stop\(\)),this\.#[A-Za-z0-9_$]+\?\.stop\(\)([\s\S]{0,220}?this\.#[A-Za-z0-9_$]+\?\.reset\(\),)this\.#[A-Za-z0-9_$]+\?\.clear\(\),(this\.#[A-Za-z0-9_$]+\(!1\),this\.#[A-Za-z0-9_$]+\.reset\(\))/,
+    // Note: no extra literal "," inserted between m[1] and m[2] — m[2]'s
+    // own lazy [\s\S]{0,220}? already swallows the comma that originally
+    // separated the two deleted calls, so adding one here produced a
+    // double comma (",,") — a real syntax corruption caught by the
+    // ESM-integrity check below, not something node --check alone flagged.
+    (m) => `${m[1]}${m[2]}${m[3]}`
   );
 
   // 10. Camera-mode cycle.
