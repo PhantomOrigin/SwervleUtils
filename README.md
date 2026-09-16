@@ -1,20 +1,18 @@
-# Swervle Replay Viewer (unofficial)
+# Swervle Utils
 
-A browser extension for swervle.com that adds:
-
-- A **compact TrackMania-style leaderboard box**: top 7 plus your PB and its neighbors (or top 10 if you have no PB today), with an **"ALL" toggle** that expands it to take up the full height of the left edge, scrollable, showing every ranked time on the track (no extra request — the leaderboard API already returns the full list). Each row has three buttons: **▶ Watch**, **🏁 Race**, and **👁 (toggle)**.
-- **Instant in-game ghost racing/watching** — spawns a ghost directly into the *actual running 3D scene*, live, with no page/track reload. "▶ Watch" spectates it (camera follows the ghost, your own car never moves, nothing is submitted). "🏁 Race" drives it alongside you for a real race. "👁" independently shows/hides that run's ghost in the scene without touching the camera or your splits target — multiple ghosts can be toggled on at once, each a genuinely separate car, each with its **own random color** and a **visible nametag**.
-- A **live split/checkpoint ("gate") tracker**: a permanent panel listing your time, delta vs PB, and speed delta for every checkpoint reached so far (never trimmed), plus a transient popup — solid-background blocks, TrackMania-split-mod style, docked directly under the site's own big in-game timer — that flashes the same delta for a few seconds right as you cross each checkpoint.
-- The leaderboard box sits flush against the left edge and the split panel flush against the right edge, both slightly above vertical center, and both are **hidden during the map-loading screen** — they reappear once the site's own `data-game-state` reports `ready` again, which covers both active racing and the pause menu (a dialog layered on top of that same state).
-- A **car color picker for your own car**, injected directly into the site's own native settings menu (the ⚙ panel), next to Sound/Graphics/etc. — recolors the car you actually drive, not any ghost. Confirmed to need an actual page reload to take effect (a race retry alone isn't enough — the player's car object turns out to persist across retries and even new races within the same page session).
-- A **live input overlay while spectating**: a small HUD showing the followed ghost's held keys (left/right/throttle/reverse/handbrake) each tick.
+- **Replay Viewer** Allows you to view individual runs and their inputs, with adjustable replay speed and rewind or fast forward.
+- **Ghost Viewer** and **Leaderboard HUD** allow you to view multiple ghosts simultaneously without having to reload the page
+- **Split HUD** shows time and speed difference through checkpoints compared to pb
+- **Gear HUD** shows current gear and progress to next gear
+- **Reverse Cam** allows you to add reverse cam into the camera rotation and also remove freecam
+- **Restart Input Fix** prevents an issue where restarting a run prevents held keys from working until they are repressed.
 
 ## Install (Chrome / Edge / Brave, unpacked)
 
-1. Go to `chrome://extensions`.
-2. Enable **Developer mode** (top right).
-3. Click **Load unpacked** and select this folder (`C:\Swervle Replay Viewer`).
-4. Open swervle.com. The leaderboard box appears immediately. Start a race — that's when the live hooks initialize (the patch installs `window.__srv.ready` fresh every race boot), so "Watch"/"Race" only get the instant in-game path *during or after* a race has loaded once this session; before that, or if the patch didn't apply, they transparently fall back.
+1. Download and unzip 'SwervleUtils.zip'
+2. Go to `chrome://extensions`.
+3. Enable **Developer mode** (top right).
+4. Click **Load unpacked** and select this folder (`C:\Swervle Replay Viewer`).
 
 ## How it works
 
