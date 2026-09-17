@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Swervle Utils",
-  "version": "1.7",
+  "version": "1.8",
   "description": "A clientside extension with some basic quality of life improvements.",
   "icons": {
     "16": "icons/icon-16.png",

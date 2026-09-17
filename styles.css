@@ -48,6 +48,23 @@
   background: rgba(107, 240, 163, 0.18);
   color: #6bf0a3;
 }
+.srv-remove-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 7px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 999px;
+  cursor: pointer;
+  line-height: 1.6;
+  border: 1px solid rgba(209, 59, 59, 0.5);
+  background: rgba(209, 59, 59, 0.12);
+  color: #ff8080;
+}
+.srv-remove-btn:hover {
+  background: rgba(209, 59, 59, 0.28);
+}
 
 /* Wrapper used by injectButton/injectAttemptButtons on every native board
    row (in-race board, pause-menu board, and the "LEADERBOARD" screen's
@@ -154,6 +171,47 @@
   background: rgba(90, 200, 255, 0.18);
   color: #5ac8ff;
 }
+.srv-board-add {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 999px;
+  color: #8a93a6;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  line-height: 1;
+  padding: 2px 7px;
+}
+.srv-board-add:hover {
+  color: #e6e9f0;
+  border-color: rgba(255, 255, 255, 0.3);
+}
+.srv-board-tabs {
+  display: flex;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.srv-board-tab {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: #8a93a6;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  padding: 6px 4px;
+  border-bottom: 2px solid transparent;
+}
+.srv-board-tab:hover {
+  color: #e6e9f0;
+}
+.srv-board-tab.srv-active {
+  color: #5ac8ff;
+  border-bottom-color: #5ac8ff;
+}
+.srv-board.srv-collapsed .srv-board-tabs {
+  display: none;
+}
 .srv-board-list {
   max-height: 320px;
   overflow-y: auto;
@@ -190,6 +248,13 @@
 .srv-board-row.srv-board-pending {
   background: rgba(255, 179, 71, 0.16);
   animation: srv-pending-pulse 1.4s ease-in-out infinite;
+}
+.srv-board-row.srv-board-custom {
+  background: rgba(255, 179, 71, 0.06);
+  border-left: 2px solid rgba(255, 179, 71, 0.5);
+}
+.srv-board-row.srv-board-custom .srv-board-rank {
+  color: #ffb347;
 }
 @keyframes srv-pending-pulse {
   0%, 100% { opacity: 1; }
@@ -231,7 +296,8 @@
 }
 .srv-board .srv-watch-btn,
 .srv-board .srv-race-btn,
-.srv-board .srv-eye-btn {
+.srv-board .srv-eye-btn,
+.srv-board .srv-remove-btn {
   padding: 0 6px;
   font-size: 10px;
 }

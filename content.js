@@ -25,6 +25,15 @@
   const visibleGhosts = new Map(); // publicRunId -> { displayName }
   let followedRunId = null; // who the camera is currently spectating, if anyone
 
+  // ---- locally-loaded replay files ("custom runs") — session-only, never
+  // written to storage, so they vanish on their own the moment the page is
+  // closed or reloaded. Exclusive to whichever map they were loaded on:
+  // cleared outright the moment loadBoard() sees the dailyId change. Each
+  // entry: { publicRunId, publicDisplayName, durationTicks, bytes }. ----
+  let customRuns = [];
+  let currentDailyId = null;
+  let showCustomTab = false; // only meaningful while expanded AND customRuns.length > 3
+
 
   function findRows(root) {
     return root.querySelectorAll("li");
@@ -98,6 +107,50 @@
     return d.innerHTML;
   }
 
+  // ---- local replay files ("custom runs") ----
+  //
+  // Accepts exactly the file Swervle's own "DOWNLOAD RUN" button produces —
+  // confirmed directly from the live bundle, not guessed: a JSON file with
+  // (at minimum) a `statesBase64` field, `car-state-byte-v1`-encoded, the
+  // exact same encoding/field every server-fetched ghost already uses (see
+  // decoder.js's decodeStatesBase64 — reused as-is here, no new parsing
+  // logic needed). Everything else in that file (dailyId, durationTicks,
+  // displayName, schemaVersion, etc.) is read if present and reasonably
+  // defaulted if not, so a minimal hand/tool-built file with just
+  // `statesBase64` still works.
+  async function parseReplayFile(file) {
+    let json;
+    try {
+      json = JSON.parse(await file.text());
+    } catch {
+      throw new Error("not valid JSON");
+    }
+    if (typeof json?.statesBase64 !== "string" || json.statesBase64.length === 0) {
+      throw new Error('missing "statesBase64" field');
+    }
+    if (json.stateEncoding !== undefined && json.stateEncoding !== "car-state-byte-v1") {
+      throw new Error(`unsupported stateEncoding "${json.stateEncoding}" (expected "car-state-byte-v1")`);
+    }
+    const bytes = window.SwervleDecoder.decodeStatesBase64(json.statesBase64);
+    const durationTicks = Number.isFinite(json.durationTicks) ? json.durationTicks : bytes.length;
+    const displayName =
+      typeof json.displayName === "string" && json.displayName.trim() !== ""
+        ? json.displayName.trim()
+        : file.name.replace(/\.json$/i, "");
+    return {
+      // Always a fresh local id, regardless of anything in the file itself
+      // (including a real publicRunId, if the file happens to have one) —
+      // custom runs must never collide with an actual server run id, since
+      // plenty of code elsewhere (ghost tracking, "isYou" matching, the PB
+      // cache) keys purely off publicRunId.
+      publicRunId: `local-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+      publicDisplayName: displayName,
+      durationTicks,
+      bytes,
+      isCustom: true,
+    };
+  }
+
   // ---- ghost visibility (shared by Watch, Race, and the Eye toggle) ----
 
   function refreshRowButtonStates() {
@@ -111,15 +164,27 @@
   // Spawns `info`'s replay as a live ghost directly in the running game
   // scene (no page/track reload) via the patched-bundle hooks. Safe to call
   // repeatedly for the same run — it's a no-op if already visible.
+  //
+  // `info.localBytes`, when present (custom/local-file runs only), skips
+  // the server fetch entirely and spawns straight from those already-
+  // decoded bytes — the file was already fully parsed and validated back
+  // when it was loaded (see parseReplayFile), so there's nothing left to
+  // ask the server for.
   async function ensureGhostVisible(info) {
     if (visibleGhosts.has(info.publicRunId)) return true;
     const hooks = await window.SwervleBridge.checkHooks();
     if (!hooks.available) return false;
 
-    const ghost = await window.SwervleAPI.getGhost(info.publicRunId);
-    const bytes = window.SwervleDecoder.decodeStatesBase64(ghost.statesBase64);
-    const displayName = ghost.publicDisplayName || info.displayName;
-    const result = await window.SwervleBridge.spawnGhost(info.publicRunId, bytes, displayName, ghost.livery ?? null);
+    let bytes, displayName;
+    if (info.localBytes) {
+      bytes = info.localBytes;
+      displayName = info.displayName;
+    } else {
+      const ghost = await window.SwervleAPI.getGhost(info.publicRunId);
+      bytes = window.SwervleDecoder.decodeStatesBase64(ghost.statesBase64);
+      displayName = ghost.publicDisplayName || info.displayName;
+    }
+    const result = await window.SwervleBridge.spawnGhost(info.publicRunId, bytes, displayName, info.livery ?? null);
     if (result.error) throw new Error(result.error);
 
     // Kept alongside the ghost (not just returned) so watchReplay can read
@@ -606,6 +671,9 @@
         window.SwervleBridge.setCameraFollow(info.publicRunId);
         showActiveGhostBar(`Spectating ${info.displayName}'s replay (not your run)`);
         showInputAnalysis(visibleGhosts.get(info.publicRunId)?.bytes);
+      } else if (info.localBytes) {
+        window.SwervleViewer.open({ displayName: info.displayName, publicRunId: info.publicRunId, bytes: info.localBytes });
+        showToast("In-game hooks unavailable — showing the standalone replay viewer instead.");
       } else {
         const ghost = await window.SwervleAPI.getGhost(info.publicRunId);
         const bytes = window.SwervleDecoder.decodeStatesBase64(ghost.statesBase64);
@@ -634,6 +702,11 @@
       const spawnedLive = await ensureGhostVisible(info);
       if (spawnedLive) {
         window.SwervleSplits?.setPb(info.publicRunId, info.displayName);
+      } else if (info.localBytes) {
+        // The site's own `?ghost=` fallback below only works for a real
+        // server-known publicRunId — there's no server-side equivalent for
+        // a run that only ever existed as a file on this computer.
+        showToast("In-game hooks unavailable — a local replay can't be raced without them (no fallback for local files).", true);
       } else {
         loadingBadge.remove();
         loadingBadge = null;
@@ -660,6 +733,7 @@
       <button class="srv-watch-btn" type="button" title="Watch replay (spectate only)">▶</button>
       <button class="srv-race-btn" type="button" title="Race this ghost">🏁</button>
       <button class="srv-eye-btn" type="button" title="Toggle ghost visible in-game">👁</button>
+      ${info.isCustom ? `<button class="srv-remove-btn" type="button" title="Remove this custom run">✕</button>` : ""}
     `;
     group.querySelector(".srv-watch-btn").addEventListener("click", (e) => {
       e.preventDefault();
@@ -676,6 +750,13 @@
       e.stopPropagation();
       toggleEye(info);
     });
+    if (info.isCustom) {
+      group.querySelector(".srv-remove-btn").addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        removeCustomRun(info.publicRunId);
+      });
+    }
     if (visibleGhosts.has(info.publicRunId)) group.querySelector(".srv-eye-btn").classList.add("srv-active");
     return group;
   }
@@ -844,11 +925,14 @@
     boardEl.innerHTML = `
       <div class="srv-board-header">
         <span class="srv-board-title">LEADERBOARD</span>
+        <button class="srv-board-add" type="button" title="Load a local replay file to race/watch">+</button>
         <button class="srv-board-expand" title="Show every time on the track">ALL</button>
         <button class="srv-board-refresh" title="Refresh">⟳</button>
         <button class="srv-board-collapse" title="Collapse">—</button>
       </div>
+      <div class="srv-board-tabs" style="display:none"></div>
       <div class="srv-board-list"><div class="srv-board-empty">Loading…</div></div>
+      <input type="file" class="srv-board-file-input" accept="application/json,.json" style="display:none" />
     `;
     document.body.appendChild(boardEl);
     applyHudLayout("leaderboard", boardEl);
@@ -866,6 +950,34 @@
       boardEl.classList.toggle("srv-expanded", expanded);
       renderRows(computeRows());
     });
+
+    const fileInput = boardEl.querySelector(".srv-board-file-input");
+    boardEl.querySelector(".srv-board-add").addEventListener("click", () => fileInput.click());
+    fileInput.addEventListener("change", async () => {
+      const file = fileInput.files?.[0];
+      fileInput.value = ""; // so picking the exact same file again still fires "change"
+      if (!file) return;
+      try {
+        const run = await parseReplayFile(file);
+        customRuns.push({
+          publicRunId: run.publicRunId,
+          publicDisplayName: run.publicDisplayName,
+          durationTicks: run.durationTicks,
+          bytes: run.bytes,
+        });
+        renderRows(computeRows());
+        showToast(`Loaded "${run.publicDisplayName}" as a custom run for this map.`);
+      } catch (err) {
+        console.error("[Swervle Replay Viewer] failed to load local replay file", err);
+        showToast(`Couldn't load that file (${err.message}).`, true);
+      }
+    });
+  }
+
+  function removeCustomRun(publicRunId) {
+    hideGhost(publicRunId);
+    customRuns = customRuns.filter((r) => r.publicRunId !== publicRunId);
+    renderRows(computeRows());
   }
 
   function fmtTicks(durationTicks, tickRate = window.SwervleDecoder.TICK_RATE) {
@@ -909,18 +1021,27 @@
 
   function renderRows(rows) {
     if (!boardListEl) return;
+    updateCustomTabsUI();
     withPauseSuppressed(() => {
       if (rows.length === 0) {
         boardListEl.innerHTML = `<div class="srv-board-empty">No leaderboard data yet.</div>`;
         return;
       }
       boardListEl.innerHTML = rows
-        .map((row) => {
-          if (row.separator) return `<div class="srv-board-sep">⋯</div>`;
-          const cls = [row.isYou && "srv-board-you", row.pending && "srv-board-pending"].filter(Boolean).join(" ");
+        .map((row, i) => {
+          if (row.separator) return `<div class="srv-board-sep">${row.label ? escapeHtml(row.label) : "⋯"}</div>`;
+          const cls = [row.isYou && "srv-board-you", row.pending && "srv-board-pending", row.isCustom && "srv-board-custom"]
+            .filter(Boolean)
+            .join(" ");
           const timeText = row.pending ? escapeHtml(row.pendingTimeText) : fmtTicks(row.durationTicks);
+          // data-srv-row-index rather than data-run-id to key back into
+          // `rows` below — custom runs don't collide with each other (each
+          // gets a fresh id), but nothing stops a real leaderboard row from
+          // legitimately appearing twice in one render (e.g. as both your
+          // own entry and someone else's neighbor row), which a lookup by
+          // publicRunId alone can't tell apart.
           return `
-            <div class="srv-board-row${cls ? " " + cls : ""}" data-run-id="${row.publicRunId}">
+            <div class="srv-board-row${cls ? " " + cls : ""}" data-srv-row-index="${i}">
               <span class="srv-board-rank">${row.rank}</span>
               <span class="srv-board-name">${escapeHtml(row.publicDisplayName)}</span>
               <span class="srv-board-time">${timeText}${row.pending ? " ⏳" : ""}</span>
@@ -929,30 +1050,90 @@
         })
         .join("");
       boardListEl.querySelectorAll(".srv-board-row").forEach((rowEl) => {
-        const runId = rowEl.getAttribute("data-run-id");
-        const row = rows.find((r) => !r.separator && r.publicRunId === runId);
-        const info = { publicRunId: row.publicRunId, displayName: row.publicDisplayName };
+        const row = rows[Number(rowEl.getAttribute("data-srv-row-index"))];
+        const info = {
+          publicRunId: row.publicRunId,
+          displayName: row.publicDisplayName,
+          isCustom: row.isCustom === true,
+          localBytes: row.localBytes,
+        };
         rowEl.querySelector("[data-srv-anchor]").replaceWith(buildButtonGroup(info));
       });
+    });
+  }
+
+  // Shows/hides and wires the "ALL TIMES" / "CUSTOM RUNS" tab strip — only
+  // ever visible once hasCustomRunsTab() is true (expanded + more custom
+  // runs than fit as an inline preview). Re-run on every renderRows() call
+  // rather than only when the tab first appears/disappears, since it's
+  // cheap and keeps this from needing its own separate invalidation path.
+  function updateCustomTabsUI() {
+    const tabsEl = boardEl?.querySelector(".srv-board-tabs");
+    if (!tabsEl) return;
+    if (!hasCustomRunsTab()) {
+      tabsEl.style.display = "none";
+      showCustomTab = false; // don't strand the board on a tab that no longer exists
+      return;
+    }
+    tabsEl.style.display = "flex";
+    tabsEl.innerHTML = `
+      <button type="button" class="srv-board-tab${showCustomTab ? "" : " srv-active"}" data-tab="times">ALL TIMES</button>
+      <button type="button" class="srv-board-tab${showCustomTab ? " srv-active" : ""}" data-tab="custom">CUSTOM (${customRuns.length})</button>
+    `;
+    tabsEl.querySelector('[data-tab="times"]').addEventListener("click", () => {
+      showCustomTab = false;
+      renderRows(computeRows());
+    });
+    tabsEl.querySelector('[data-tab="custom"]').addEventListener("click", () => {
+      showCustomTab = true;
+      renderRows(computeRows());
     });
   }
 
   // Abbreviated (top 7 + PB context / top 10) or, when expanded, literally
   // every ranked time on the track — using the same already-fetched
   // `lastEntries`, no extra request needed.
+  // Formats customRuns entries into the same row shape lastEntries uses,
+  // so renderRows()/buildButtonGroup() don't need to know custom rows are
+  // in any way different — "★" stands in for a rank number they don't
+  // have, and localBytes is what tells ensureGhostVisible/watchReplay/
+  // raceGhost to skip the server fetch entirely (see parseReplayFile).
+  function customRunRows() {
+    return customRuns.map((r) => ({
+      publicRunId: r.publicRunId,
+      publicDisplayName: r.publicDisplayName,
+      durationTicks: r.durationTicks,
+      rank: "★",
+      isCustom: true,
+      localBytes: r.bytes,
+      displayName: r.publicDisplayName,
+    }));
+  }
+
+  // Only true once there are enough custom runs that showing all of them
+  // inline would crowd out the real leaderboard — past that point they get
+  // their own tab (see renderRows()) instead of an inline preview.
+  function hasCustomRunsTab() {
+    return expanded && customRuns.length > 3;
+  }
+
   function computeRows() {
     const entries = lastEntries;
     const yourEntry = lastYourEntry;
 
-    if (expanded) {
-      boardTitleEl.textContent = "ALL TIMES";
-      return entries.map((e) => ({ ...e, isYou: yourEntry != null && e.publicRunId === yourEntry.publicRunId }));
+    if (hasCustomRunsTab() && showCustomTab) {
+      boardTitleEl.textContent = "CUSTOM RUNS";
+      return customRunRows();
     }
 
-    if (yourEntry) {
+    let rows;
+    if (expanded) {
+      boardTitleEl.textContent = "ALL TIMES";
+      rows = entries.map((e) => ({ ...e, isYou: yourEntry != null && e.publicRunId === yourEntry.publicRunId }));
+    } else if (yourEntry) {
       boardTitleEl.textContent = "LEADERBOARD";
       const top = entries.filter((e) => e.rank <= 7);
-      const rows = top.map((e) => ({ ...e, isYou: e.publicRunId === yourEntry.publicRunId }));
+      rows = top.map((e) => ({ ...e, isYou: e.publicRunId === yourEntry.publicRunId }));
       if (yourEntry.rank > 7) {
         const above = entries.find((e) => e.rank === yourEntry.rank - 1);
         const below = entries.find((e) => e.rank === yourEntry.rank + 1);
@@ -966,11 +1147,18 @@
         const below = entries.find((e) => e.rank === 8);
         if (below) rows.push(below);
       }
-      return applyPendingOverlay(rows);
+      rows = applyPendingOverlay(rows);
+    } else {
+      boardTitleEl.textContent = "TOP 10";
+      rows = applyPendingOverlay(entries.filter((e) => e.rank <= 10));
     }
 
-    boardTitleEl.textContent = "TOP 10";
-    return applyPendingOverlay(entries.filter((e) => e.rank <= 10));
+    // Inline preview — skipped once hasCustomRunsTab() is true, since the
+    // dedicated tab is the whole list's home at that point instead.
+    if (customRuns.length > 0 && !hasCustomRunsTab()) {
+      rows = [...rows, { separator: true, label: "CUSTOM RUNS" }, ...customRunRows().slice(0, 3)];
+    }
+    return rows;
   }
 
   // Overlays a just-finished result on top of whatever's already computed,
@@ -1013,8 +1201,14 @@
 
   // How often the board re-fetches on its own (beyond the explicit refresh
   // button, a just-finished run, or a route change/reload) so other
-  // players' new times show up without you having to ask.
-  const AUTO_REFRESH_MS = 20000;
+  // players' new times show up without you having to ask. Matched against
+  // the site's OWN pause-menu board directly in the live bundle first —
+  // there's no special faster data source there (same endpoint, confirmed:
+  // no WebSocket/SSE anywhere in the bundle), it just refetches on menu-
+  // open (with a short de-dupe window) and at-finish, which we already
+  // replicate via the pending-result overlay. This interval is the actual
+  // remaining gap for "someone else's new time shows up" during a race.
+  const AUTO_REFRESH_MS = 6000;
 
   // ---- locally-remembered PB, per dailyId — a fallback for when the live
   // getAccountRuns() fetch fails (confirmed to happen: swervle's own API
@@ -1079,6 +1273,16 @@
       ]);
       const dailyId = routeDailyId || manifest?.dailyId;
       if (!dailyId) throw new Error("no dailyId in manifest");
+
+      // Custom runs are exclusive to whichever map they were loaded on —
+      // switching maps drops them outright (they were never persisted
+      // anywhere, so this is the only place that needs to clear them).
+      if (currentDailyId !== null && currentDailyId !== dailyId) {
+        for (const r of customRuns) hideGhost(r.publicRunId);
+        customRuns = [];
+        showCustomTab = false;
+      }
+      currentDailyId = dailyId;
 
       lastEntries = (await window.SwervleAPI.getLeaderboard(dailyId)).slice().sort((a, b) => a.rank - b.rank);
 
