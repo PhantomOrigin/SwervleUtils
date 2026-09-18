@@ -1,10 +1,10 @@
 {
-  "mainFilename": "e3c40cc0-CYATxW6y.js",
+  "mainFilename": "e3c40cc0-4LPig91u.js",
   "tvFilename": "c3c40cc0-BY1qsySJ.js",
   "patchCount": 12,
   "failedPatches": [
     "main bundle/watchReplayControlLock_handbrake",
     "main bundle/watchReplayControlLock_throttle"
   ],
-  "patchedAt": "2026-09-18T19:41:29.496Z"
+  "patchedAt": "2026-09-18T23:55:58.651Z"
 }
