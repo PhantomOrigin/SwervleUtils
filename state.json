@@ -1,9 +1,7 @@
 {
-  "mainFilename": "e3c40cc0-C-H4xWOn.js",
-  "tvFilename": "c3c40cc0-xF_MjuUp.js",
+  "mainFilename": "e3c40cc0-B1MZWUCh.js",
+  "tvFilename": "c3c40cc0-BY1qsySJ.js",
   "patchCount": 12,
-  "failedPatches": [
-    "TerrainView chunk/raceTelemetry"
-  ],
-  "patchedAt": "2026-09-18T00:00:17.915Z"
+  "failedPatches": [],
+  "patchedAt": "2026-09-18T04:44:50.730Z"
 }
