@@ -1,10 +1,11 @@
 {
-  "mainFilename": "e3c40cc0-DbN80Vt7.js",
-  "tvFilename": "c3c40cc0-BY1qsySJ.js",
+  "mainFilename": "e3c40cc0-Bs4BaRh-.js",
+  "tvFilename": "c3c40cc0-BJsikUZQ.js",
   "patchCount": 12,
   "failedPatches": [
     "main bundle/watchReplayControlLock_handbrake",
-    "main bundle/watchReplayControlLock_throttle"
+    "main bundle/watchReplayControlLock_throttle",
+    "TerrainView chunk/raceTelemetry"
   ],
-  "patchedAt": "2026-09-19T03:53:09.077Z"
+  "patchedAt": "2026-09-20T20:50:06.078Z"
 }
