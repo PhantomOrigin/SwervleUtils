@@ -1,5 +1,5 @@
 {
-  "mainFilename": "e3c40cc0-BU-8hfh1.js",
+  "mainFilename": "e3c40cc0-BcZZeHbR.js",
   "tvFilename": "c3c40cc0-BJsikUZQ.js",
   "patchCount": 12,
   "failedPatches": [
@@ -7,5 +7,5 @@
     "main bundle/watchReplayControlLock_throttle",
     "TerrainView chunk/raceTelemetry"
   ],
-  "patchedAt": "2026-09-21T01:06:40.123Z"
+  "patchedAt": "2026-09-21T06:22:12.132Z"
 }
