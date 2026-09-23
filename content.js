@@ -1003,7 +1003,7 @@
   // mutation is happening in, via window.__srvSuppressPause (set through
   // srv-main.js, since content.js's isolated world can't set it directly).
   function withPauseSuppressed(fn) {
-    document.dispatchEvent(new CustomEvent("srv:suppressPause", { detail: { suppress: true } }));
+    document.dispatchEvent(new CustomEvent("srv:suppressPause", { detail: window.SwervleToPage({ suppress: true }) }));
     try {
       fn();
     } finally {
@@ -1013,7 +1013,7 @@
       // it, not necessarily in the same microtask.
       requestAnimationFrame(() =>
         requestAnimationFrame(() =>
-          document.dispatchEvent(new CustomEvent("srv:suppressPause", { detail: { suppress: false } }))
+          document.dispatchEvent(new CustomEvent("srv:suppressPause", { detail: window.SwervleToPage({ suppress: false }) }))
         )
       );
     }

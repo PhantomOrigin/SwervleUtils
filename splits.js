@@ -32,13 +32,13 @@
   // since these are two independently-loaded content scripts with no
   // shared module scope — it's just two CustomEvent dispatches either way.
   function withPauseSuppressed(fn) {
-    document.dispatchEvent(new CustomEvent("srv:suppressPause", { detail: { suppress: true } }));
+    document.dispatchEvent(new CustomEvent("srv:suppressPause", { detail: window.SwervleToPage({ suppress: true }) }));
     try {
       fn();
     } finally {
       requestAnimationFrame(() =>
         requestAnimationFrame(() =>
-          document.dispatchEvent(new CustomEvent("srv:suppressPause", { detail: { suppress: false } }))
+          document.dispatchEvent(new CustomEvent("srv:suppressPause", { detail: window.SwervleToPage({ suppress: false }) }))
         )
       );
     }

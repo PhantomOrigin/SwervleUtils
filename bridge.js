@@ -5,6 +5,17 @@
 (function () {
   let seq = 1;
 
+  // Firefox only: an object built here (the extension's isolated world) can't
+  // be read by srv-main.js in the page's own world — reading it throws
+  // "Permission denied to access property ..." — so event details must be
+  // copied into the page with cloneInto (which structured-clones, so typed
+  // arrays like a ghost's input bytes still work). Chrome has no cloneInto
+  // and shares detail across worlds natively, so there this is a no-op and
+  // behaviour is exactly what it was before. Exposed on window so content.js
+  // and splits.js (same isolated world) use the same helper.
+  const toPage = (obj) => (typeof cloneInto === "function" ? cloneInto(obj, window) : obj);
+  window.SwervleToPage = toPage;
+
   function request(requestType, detail, responseType) {
     return new Promise((resolve) => {
       const requestId = seq++;
@@ -14,7 +25,7 @@
         resolve(e.detail);
       };
       document.addEventListener(responseType, handler);
-      document.dispatchEvent(new CustomEvent(requestType, { detail: { ...detail, requestId } }));
+      document.dispatchEvent(new CustomEvent(requestType, { detail: toPage({ ...detail, requestId }) }));
     });
   }
 
@@ -27,9 +38,9 @@
     // { key, error? }
     spawnGhost: (key, states, displayName, livery) =>
       request("srv:spawnGhost", { key, states, displayName, livery }, "srv:spawnGhostResult"),
-    despawnGhost: (key) => document.dispatchEvent(new CustomEvent("srv:despawnGhost", { detail: { key } })),
+    despawnGhost: (key) => document.dispatchEvent(new CustomEvent("srv:despawnGhost", { detail: toPage({ key }) })),
     setCameraFollow: (key) =>
-      document.dispatchEvent(new CustomEvent("srv:setCameraFollow", { detail: { key } })),
+      document.dispatchEvent(new CustomEvent("srv:setCameraFollow", { detail: toPage({ key }) })),
     // { gates: [{gateIndex,tick,speed}], totalTicks, error? }
     computeSplits: (states) => request("srv:computeSplits", { states }, "srv:splitsResult"),
     // Playback speed multiplier for the currently-followed ghost only (see
@@ -37,7 +48,7 @@
     // followed ghost. Fire-and-forget: there's nothing to await, the next
     // srv:ghostInput tick reflects the new speed.
     setReplaySpeed: (key, speed) =>
-      document.dispatchEvent(new CustomEvent("srv:setReplaySpeed", { detail: { key, speed } })),
+      document.dispatchEvent(new CustomEvent("srv:setReplaySpeed", { detail: toPage({ key, speed }) })),
     // Scrubs the currently-followed ghost to an arbitrary tick. Resolves
     // once the seek actually lands (real physics can only step forward, so
     // this is a fast-forward-from-scratch under the hood and isn't

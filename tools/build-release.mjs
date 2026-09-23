@@ -165,7 +165,16 @@ function main() {
   console.log(`Building v${chromeManifest.version}`);
   for (const [file, entries] of builds) {
     const zip = buildZip(entries);
-    writeFileSync(join(VERSIONS, file), zip);
+    try {
+      writeFileSync(join(VERSIONS, file), zip);
+    } catch (err) {
+      // Windows refuses to overwrite a zip another program has open — in
+      // practice Firefox, which keeps a temporary add-on's zip locked for as
+      // long as it's loaded in about:debugging.
+      console.error(`  versions/${file}  NOT written (${err.code ?? err.message}) — is it still loaded as a temporary add-on in Firefox, or open in another program? Remove/close it and run this again.`);
+      process.exitCode = 1;
+      continue;
+    }
     console.log(`  versions/${file}  (${entries.length} files, ${zip.length} bytes)`);
   }
 }
