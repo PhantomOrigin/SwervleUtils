@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Builds both release zips from this one source tree:
-//   dist/SwervleUtils.zip          Chrome / Edge / Brave (manifest.json as-is)
-//   dist/SwervleUtils-firefox.zip  Firefox (manifest derived from manifest.json)
+//   versions/SwervleUtilsChromium.zip  Chrome / Edge / Brave (manifest.json as-is)
+//   versions/SwervleUtilsFirefox.zip   Firefox (manifest derived from manifest.json)
 //
 // The Firefox manifest is GENERATED from manifest.json rather than kept as a
 // second hand-edited file, so the two can never drift out of sync (version,
@@ -32,7 +32,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const DIST = join(ROOT, "dist");
+const VERSIONS = join(ROOT, "versions");
 
 // Changing this later would make Firefox treat the add-on as a different one
 // (users would lose settings/storage and not get updates) — pick once.
@@ -157,16 +157,16 @@ function main() {
   const firefoxManifest = toFirefoxManifest(chromeManifest);
   const firefoxBytes = Buffer.from(JSON.stringify(firefoxManifest, null, 2) + "\n", "utf8");
 
-  mkdirSync(DIST, { recursive: true });
+  mkdirSync(VERSIONS, { recursive: true });
   const builds = [
-    ["SwervleUtils.zip", collect(chromeBytes, chromeManifest)],
-    ["SwervleUtils-firefox.zip", collect(firefoxBytes, firefoxManifest)],
+    ["SwervleUtilsChromium.zip", collect(chromeBytes, chromeManifest)],
+    ["SwervleUtilsFirefox.zip", collect(firefoxBytes, firefoxManifest)],
   ];
   console.log(`Building v${chromeManifest.version}`);
   for (const [file, entries] of builds) {
     const zip = buildZip(entries);
-    writeFileSync(join(DIST, file), zip);
-    console.log(`  dist/${file}  (${entries.length} files, ${zip.length} bytes)`);
+    writeFileSync(join(VERSIONS, file), zip);
+    console.log(`  versions/${file}  (${entries.length} files, ${zip.length} bytes)`);
   }
 }
 
