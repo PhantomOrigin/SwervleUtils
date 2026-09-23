@@ -1210,6 +1210,20 @@
   // remaining gap for "someone else's new time shows up" during a race.
   const AUTO_REFRESH_MS = 6000;
 
+  // Swervle's leaderboard endpoint sometimes hangs ~5s and then returns 500
+  // (reproduced with plain curl, no extension involved) — polling every 6s
+  // straight through that just adds load to a server that's already
+  // struggling. After a failure the AUTOMATIC refresh backs off (12s, 24s,
+  // ... capped at 60s) and snaps back to normal on the first success; the
+  // refresh button, finishing a run and route changes still fetch
+  // immediately regardless.
+  let boardFailures = 0;
+  let nextAutoBoardLoadAt = 0;
+  function autoRefreshBoard() {
+    if (Date.now() < nextAutoBoardLoadAt) return;
+    loadBoard();
+  }
+
   // ---- locally-remembered PB, per dailyId — a fallback for when the live
   // getAccountRuns() fetch fails (confirmed to happen: swervle's own API
   // has returned 500/503 intermittently), which otherwise makes your own
@@ -1309,11 +1323,15 @@
         if (cachedRunId) lastYourEntry = lastEntries.find((e) => e.publicRunId === cachedRunId) || null;
       }
 
+      boardFailures = 0;
+      nextAutoBoardLoadAt = 0;
       pendingResult = null; // real data has arrived — stop overlaying the guess
       renderRows(computeRows());
       window.SwervleSplits?.setPb(lastYourEntry?.publicRunId ?? null, lastYourEntry?.publicDisplayName ?? null);
     } catch (err) {
       console.error("[Swervle Replay Viewer] failed to load leaderboard", err);
+      boardFailures++;
+      nextAutoBoardLoadAt = Date.now() + Math.min(60000, AUTO_REFRESH_MS * 2 ** Math.min(boardFailures, 4));
       // Leave whatever was already showing (old data or a pending overlay)
       // in place rather than replacing it with an error message.
       if (lastEntries.length === 0 && !pendingResult) {
@@ -2031,7 +2049,7 @@
     // No longer skips during "racing"/"countdown" — see withPauseSuppressed
     // above, which is what actually makes updating live during a run safe
     // now, rather than this interval avoiding the risky time entirely.
-    setInterval(loadBoard, AUTO_REFRESH_MS);
+    setInterval(autoRefreshBoard, AUTO_REFRESH_MS);
 
     const observer = new MutationObserver((mutations) => {
       for (const m of mutations) {
