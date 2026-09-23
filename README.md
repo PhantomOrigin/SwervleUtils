@@ -36,7 +36,7 @@ Requires [Node.js](https://nodejs.org) 18 or newer. From the project folder run:
 node tools/build-release.mjs
 ```
 
-This creates `versions/SwervleUtilsChromium.zip` and `versions/SwervleUtilsFirefox.zip`, ready to upload to a GitHub release. The `versions` folder is ignored by git. If a zip fails to write, remove the extension from Firefox (it locks the file while loaded) and run it again.
+This creates `versions/SwervleUtilsChromium.zip` and `versions/SwervleUtilsFirefox.zip`. If a zip fails to write, remove the extension from Firefox (it locks the file while loaded) and run it again.
 
 ## How it works
 
