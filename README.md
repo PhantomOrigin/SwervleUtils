@@ -2,17 +2,31 @@
 
 - **Replay Viewer** Allows you to view individual runs and their inputs, with adjustable replay speed and rewind or fast forward.
 - **Ghost Viewer** and **Leaderboard HUD** allow you to view multiple ghosts simultaneously without having to reload the page
+- **Custom Runs** press the **+** on the leaderboard to load a replay file (the .json from Swervle's Download Run) and race or watch it. They only last for the session and only on that map.
 - **Split HUD** shows time and speed difference through checkpoints compared to pb
 - **Gear HUD** shows current gear and progress to next gear
+- **Live Input Keys** shows the keys you are pressing while you drive
+- **HUD Editor** open **Swervle Utils** in the settings menu to hide, move and resize the HUD elements
 - **Reverse Cam** allows you to add reverse cam into the camera rotation and also remove freecam
 - **Restart Input Fix** prevents an issue where restarting a run prevents held keys from working until they are repressed.
+- **Update Notice** tells you when a newer version is available on GitHub.
 
-## Install (Chrome / Edge / Brave, unpacked)
+## Install
 
-1. Download and unzip 'SwervleUtils.zip'
+Download the zip for your browser from the latest [release](../../releases/latest) and unzip it.
+
+### Chrome / Edge / Brave
+
+1. Download and unzip 'SwervleUtilsChromium.zip'
 2. Go to `chrome://extensions`.
 3. Enable **Developer mode** (top right).
-4. Click **Load unpacked** and select this folder (`C:\Swervle Replay Viewer`).
+4. Click **Load unpacked** and select the unzipped folder.
+
+### Firefox (experimental, Firefox 128 or newer)
+
+1. Download 'SwervleUtilsFirefox.zip'
+2. Go to `about:debugging#/runtime/this-firefox`.
+3. Click **Load Temporary Add-on** and select the zip. Firefox removes it when it closes, so this needs repeating each time.
 
 ## How it works
 
