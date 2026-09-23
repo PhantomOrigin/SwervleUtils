@@ -28,6 +28,16 @@ Download the zip for your browser from the latest [release](../../releases/lates
 2. Go to `about:debugging#/runtime/this-firefox`.
 3. Click **Load Temporary Add-on** and select the zip. Firefox removes it when it closes, so this needs repeating each time.
 
+## Building
+
+Requires [Node.js](https://nodejs.org) 18 or newer. From the project folder run:
+
+```
+node tools/build-release.mjs
+```
+
+This creates `versions/SwervleUtilsChromium.zip` and `versions/SwervleUtilsFirefox.zip`, ready to upload to a GitHub release. The `versions` folder is ignored by git. If a zip fails to write, remove the extension from Firefox (it locks the file while loaded) and run it again.
+
 ## How it works
 
 ### Leaderboard box (no patching needed — this part is fully standard API usage)
