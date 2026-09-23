@@ -16,6 +16,22 @@
   const toPage = (obj) => (typeof cloneInto === "function" ? cloneInto(obj, window) : obj);
   window.SwervleToPage = toPage;
 
+  // Replaces an element's children with markup, parsed via DOMParser instead
+  // of assigning innerHTML (which store validators flag as unsafe). Parsed
+  // documents are inert, and script elements / inline event handlers /
+  // javascript: URLs are stripped as defence in depth — all our markup is
+  // static templates with escaped values, so nothing legitimate is lost.
+  window.SwervleSetHtml = (el, html) => {
+    const doc = new DOMParser().parseFromString(`<!doctype html><body>${html}`, "text/html");
+    doc.querySelectorAll("script, iframe, object, embed").forEach((n) => n.remove());
+    for (const n of doc.body.querySelectorAll("*")) {
+      for (const attr of [...n.attributes]) {
+        if (/^on/i.test(attr.name) || /^\s*javascript:/i.test(attr.value)) n.removeAttribute(attr.name);
+      }
+    }
+    el.replaceChildren(...doc.body.childNodes);
+  };
+
   function request(requestType, detail, responseType) {
     return new Promise((resolve) => {
       const requestId = seq++;

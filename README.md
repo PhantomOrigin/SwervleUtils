@@ -22,7 +22,7 @@ Download the zip for your browser from the latest [release](../../releases/lates
 3. Enable **Developer mode** (top right).
 4. Click **Load unpacked** and select the unzipped folder.
 
-### Firefox (experimental, Firefox 128 or newer)
+### Firefox (experimental, Firefox 140 or newer)
 
 1. Download 'SwervleUtilsFirefox.zip'
 2. Go to `about:debugging#/runtime/this-firefox`.

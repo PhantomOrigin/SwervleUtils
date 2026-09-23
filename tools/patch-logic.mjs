@@ -207,7 +207,7 @@ export function patchMainBundle(mainSrc, mainRawSrc, names, origin, results, log
         `buildNameplate:${names.buildNameplate},viewParent:this.${names.playerSceneManager}.viewParent,` +
         `materialRegistrar:this.${names.playerSceneManager}.materialRegistrar,` +
         `modifiers:this.${names.physicsModifiers},track:i.track,assetFactory:this.${names.assetFactory},` +
-        `liveryModuleUrl:${JSON.stringify(liveryChunkUrl)},` +
+        `liveryModuleUrl:${JSON.stringify(liveryChunkUrl)},loadLiveryModule:()=>import(${JSON.stringify(liveryChunkUrl)}),` +
         (names.cameraController ? `camera:this.${names.cameraController}?.camera` : "camera:null") +
         "};" +
         "try{window.__srv.onRaceBoot?.();}catch(e){console.error(e);}"

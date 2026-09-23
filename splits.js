@@ -61,13 +61,13 @@
 
     panelEl = document.createElement("div");
     panelEl.className = "srv-splits";
-    panelEl.innerHTML = `
+    window.SwervleSetHtml(panelEl, `
       <div class="srv-splits-header">
         <span class="srv-splits-title">SPLITS vs PB</span>
         <button class="srv-splits-collapse" title="Collapse">—</button>
       </div>
       <div class="srv-splits-list"></div>
-    `;
+    `);
     document.body.appendChild(panelEl);
     window.SwervleHudLayout?.apply("splits", panelEl);
     listEl = panelEl.querySelector(".srv-splits-list");
@@ -110,11 +110,11 @@
   function showPopup(gateIndex, deltaTicks, deltaSpeed) {
     if (!popupEl) return;
     const behind = deltaTicks > 0;
-    popupEl.innerHTML = `
+    window.SwervleSetHtml(popupEl, `
       <div class="srv-popup-row srv-popup-cp">CHECKPOINT ${gateIndex + 1}</div>
       <div class="srv-popup-row srv-popup-delta ${behind ? "srv-split-behind" : "srv-split-ahead"}">${fmtDeltaTicks(deltaTicks)}</div>
       <div class="srv-popup-row srv-popup-speed">${deltaSpeed >= 0 ? "+" : ""}${deltaSpeed.toFixed(1)} spd</div>
-    `;
+    `);
     popupEl.classList.add("srv-visible");
     clearTimeout(popupTimeout);
     popupTimeout = setTimeout(() => popupEl.classList.remove("srv-visible"), POPUP_VISIBLE_MS);
@@ -184,10 +184,10 @@
   function render() {
     if (!listEl) return;
     if (liveRows.length === 0) {
-      listEl.innerHTML = "";
+      window.SwervleSetHtml(listEl, "");
       return;
     }
-    listEl.innerHTML = liveRows
+    window.SwervleSetHtml(listEl, liveRows
       .map((r) => {
         const hasDelta = r.deltaTicks !== null;
         const cls = !hasDelta ? "" : r.deltaTicks <= 0 ? "srv-split-ahead" : "srv-split-behind";
@@ -201,7 +201,7 @@
             <span class="srv-split-speed">${speedText}</span>
           </div>`;
       })
-      .join("");
+      .join(""));
     listEl.scrollTop = listEl.scrollHeight;
   }
 

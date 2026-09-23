@@ -37,7 +37,7 @@
     _build() {
       const root = document.createElement("div");
       root.className = "srv-viewer-overlay";
-      root.innerHTML = `
+      window.SwervleSetHtml(root, `
         <div class="srv-viewer-panel">
           <div class="srv-viewer-header">
             <div class="srv-viewer-badge">SPECTATING REPLAY — not a live run</div>
@@ -62,7 +62,7 @@
             <span class="srv-time">0:00.000 / ${fmtTime(this.durationSec)}</span>
           </div>
         </div>
-      `;
+      `);
       document.body.appendChild(root);
       this.root = root;
       this.canvas = root.querySelector(".srv-viewer-canvas");
@@ -71,9 +71,9 @@
       this.timeEl = root.querySelector(".srv-time");
       this.scrubEl = root.querySelector(".srv-scrub");
 
-      this.hudEl.innerHTML = INPUT_LABELS.map(
+      window.SwervleSetHtml(this.hudEl, INPUT_LABELS.map(
         ([key, label]) => `<div class="srv-hud-key" data-key="${key}">${label}</div>`
-      ).join("");
+      ).join(""));
       this.hudKeyEls = {};
       this.hudEl.querySelectorAll(".srv-hud-key").forEach((el) => {
         this.hudKeyEls[el.dataset.key] = el;

@@ -37,7 +37,9 @@ const VERSIONS = join(ROOT, "versions");
 // Changing this later would make Firefox treat the add-on as a different one
 // (users would lose settings/storage and not get updates) — pick once.
 const GECKO_ID = "swervle-utils@phantomorigin";
-const GECKO_MIN_VERSION = "128.0";
+// 140 (Android: 142) is the first release that understands data_collection_permissions.
+const GECKO_MIN_VERSION = "140.0";
+const GECKO_ANDROID_MIN_VERSION = "142.0";
 
 function runtimeFiles(manifest) {
   const files = new Set();
@@ -66,6 +68,7 @@ function toFirefoxManifest(manifest) {
         strict_min_version: GECKO_MIN_VERSION,
         data_collection_permissions: { required: ["none"] },
       },
+      gecko_android: { strict_min_version: GECKO_ANDROID_MIN_VERSION },
     },
   };
 }

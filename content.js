@@ -260,7 +260,7 @@
     const hud = document.createElement("div");
     hud.className = "srv-input-hud";
     hud.style.display = "none";
-    hud.innerHTML = INPUT_HUD_KEYS.map(([key, label]) => `<div class="srv-hud-key" data-key="${key}">${label}</div>`).join("");
+    window.SwervleSetHtml(hud, INPUT_HUD_KEYS.map(([key, label]) => `<div class="srv-hud-key" data-key="${key}">${label}</div>`).join(""));
     buildSpectateHud().appendChild(hud);
 
     window.SwervleBridge.onGhostInput(({ key, inputByte }) => {
@@ -309,7 +309,7 @@
     const hud = document.createElement("div");
     hud.className = "srv-own-input-hud";
     hud.style.display = "none";
-    hud.innerHTML = INPUT_HUD_KEYS.map(([key, label]) => `<div class="srv-own-hud-key" data-key="${key}">${label}</div>`).join("");
+    window.SwervleSetHtml(hud, INPUT_HUD_KEYS.map(([key, label]) => `<div class="srv-own-hud-key" data-key="${key}">${label}</div>`).join(""));
     document.body.appendChild(hud);
     applyHudLayout("own-input-hud", hud);
 
@@ -348,7 +348,7 @@
     const scrub = document.createElement("div");
     scrub.className = "srv-replay-scrub";
     scrub.style.display = "none";
-    scrub.innerHTML = `
+    window.SwervleSetHtml(scrub, `
       <div class="srv-scrub-row">
         <input type="range" class="srv-scrub-slider" min="0" max="0" value="0" />
         <select class="srv-scrub-speed" title="Playback speed">
@@ -360,7 +360,7 @@
         </select>
       </div>
       <span class="srv-scrub-label">0 / 0</span>
-    `;
+    `);
     buildSpectateHud().appendChild(scrub);
 
     const slider = scrub.querySelector(".srv-scrub-slider");
@@ -436,13 +436,13 @@
     const panel = document.createElement("div");
     panel.className = "srv-input-analysis";
     panel.style.display = "none";
-    panel.innerHTML = `
+    window.SwervleSetHtml(panel, `
       <div class="srv-analysis-header">
         <span class="srv-analysis-title">INPUT ANALYSIS</span>
         <button class="srv-analysis-collapse" title="Collapse">—</button>
       </div>
       <div class="srv-analysis-body"></div>
-    `;
+    `);
     document.body.appendChild(panel);
     applyHudLayout("input-analysis", panel);
     panel.querySelector(".srv-analysis-collapse").addEventListener("click", () => {
@@ -541,14 +541,14 @@
     const panel = document.querySelector(".srv-input-analysis") || buildInputAnalysisPanel();
     const body = panel.querySelector(".srv-analysis-body");
     const analysis = window.SwervleDecoder.analyzeInputs(bytes);
-    body.innerHTML = renderInputAnalysisBody(analysis, null);
+    window.SwervleSetHtml(body, renderInputAnalysisBody(analysis, null));
     panel.style.display = "block";
 
     if (analysis.recoveryPressTicks.length > 0) {
       try {
         const result = await window.SwervleBridge.computeSplits(bytes);
         if (generation !== analysisGeneration) return; // a newer watch/hide superseded this one
-        if (!result.error) body.innerHTML = renderInputAnalysisBody(analysis, result.gates);
+        if (!result.error) window.SwervleSetHtml(body, renderInputAnalysisBody(analysis, result.gates));
       } catch (err) {
         console.error("[Swervle Replay Viewer] input analysis checkpoint lookup failed", err);
       }
@@ -577,10 +577,10 @@
     const hud = document.createElement("div");
     hud.className = "srv-gear-hud";
     hud.style.display = "none";
-    hud.innerHTML = `
+    window.SwervleSetHtml(hud, `
       <span class="srv-gear-hud-number">-</span>
       <div class="srv-gear-hud-track"><div class="srv-gear-hud-fill"></div></div>
-    `;
+    `);
     document.body.appendChild(hud);
     applyHudLayout("gear-hud", hud);
     const numberEl = hud.querySelector(".srv-gear-hud-number");
@@ -635,10 +635,10 @@
     const bar = document.createElement("div");
     bar.className = "srv-ghost-bar";
     bar.style.display = "none";
-    bar.innerHTML = `
+    window.SwervleSetHtml(bar, `
       <span class="srv-ghost-bar-label"></span>
       <button class="srv-btn srv-ghost-bar-stop" type="button">Stop watching</button>
-    `;
+    `);
     buildSpectateHud().appendChild(bar);
     bar.querySelector(".srv-ghost-bar-stop").addEventListener("click", () => {
       if (followedRunId) {
@@ -729,12 +729,12 @@
     const group = document.createElement("span");
     group.className = "srv-btn-group";
     group.setAttribute("data-srv-run-id", info.publicRunId);
-    group.innerHTML = `
+    window.SwervleSetHtml(group, `
       <button class="srv-watch-btn" type="button" title="Watch replay (spectate only)">▶</button>
       <button class="srv-race-btn" type="button" title="Race this ghost">🏁</button>
       <button class="srv-eye-btn" type="button" title="Toggle ghost visible in-game">👁</button>
       ${info.isCustom ? `<button class="srv-remove-btn" type="button" title="Remove this custom run">✕</button>` : ""}
-    `;
+    `);
     group.querySelector(".srv-watch-btn").addEventListener("click", (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -874,10 +874,10 @@
     const group = document.createElement("span");
     group.className = "srv-btn-group";
     group.setAttribute("data-srv-run-id", info.publicRunId);
-    group.innerHTML = `
+    window.SwervleSetHtml(group, `
       <button class="srv-watch-btn" type="button" title="Watch replay (spectate only)">▶</button>
       <button class="srv-eye-btn" type="button" title="Toggle ghost visible in-game">👁</button>
-    `;
+    `);
     group.querySelector(".srv-watch-btn").addEventListener("click", (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -922,7 +922,7 @@
 
     boardEl = document.createElement("div");
     boardEl.className = "srv-board";
-    boardEl.innerHTML = `
+    window.SwervleSetHtml(boardEl, `
       <div class="srv-board-header">
         <span class="srv-board-title">LEADERBOARD</span>
         <button class="srv-board-add" type="button" title="Load a local replay file to race/watch">+</button>
@@ -933,7 +933,7 @@
       <div class="srv-board-tabs" style="display:none"></div>
       <div class="srv-board-list"><div class="srv-board-empty">Loading…</div></div>
       <input type="file" class="srv-board-file-input" accept="application/json,.json" style="display:none" />
-    `;
+    `);
     document.body.appendChild(boardEl);
     applyHudLayout("leaderboard", boardEl);
     boardListEl = boardEl.querySelector(".srv-board-list");
@@ -1024,10 +1024,10 @@
     updateCustomTabsUI();
     withPauseSuppressed(() => {
       if (rows.length === 0) {
-        boardListEl.innerHTML = `<div class="srv-board-empty">No leaderboard data yet.</div>`;
+        window.SwervleSetHtml(boardListEl, `<div class="srv-board-empty">No leaderboard data yet.</div>`);
         return;
       }
-      boardListEl.innerHTML = rows
+      window.SwervleSetHtml(boardListEl, rows
         .map((row, i) => {
           if (row.separator) return `<div class="srv-board-sep">${row.label ? escapeHtml(row.label) : "⋯"}</div>`;
           const cls = [row.isYou && "srv-board-you", row.pending && "srv-board-pending", row.isCustom && "srv-board-custom"]
@@ -1048,7 +1048,7 @@
               <span class="srv-board-actions" data-srv-anchor></span>
             </div>`;
         })
-        .join("");
+        .join(""));
       boardListEl.querySelectorAll(".srv-board-row").forEach((rowEl) => {
         const row = rows[Number(rowEl.getAttribute("data-srv-row-index"))];
         const info = {
@@ -1076,10 +1076,10 @@
       return;
     }
     tabsEl.style.display = "flex";
-    tabsEl.innerHTML = `
+    window.SwervleSetHtml(tabsEl, `
       <button type="button" class="srv-board-tab${showCustomTab ? "" : " srv-active"}" data-tab="times">ALL TIMES</button>
       <button type="button" class="srv-board-tab${showCustomTab ? " srv-active" : ""}" data-tab="custom">CUSTOM (${customRuns.length})</button>
-    `;
+    `);
     tabsEl.querySelector('[data-tab="times"]').addEventListener("click", () => {
       showCustomTab = false;
       renderRows(computeRows());
@@ -1267,7 +1267,7 @@
     // gets the loading placeholder.
     if (lastEntries.length === 0 && !pendingResult) {
       withPauseSuppressed(() => {
-        boardListEl.innerHTML = `<div class="srv-board-empty">Loading…</div>`;
+        window.SwervleSetHtml(boardListEl, `<div class="srv-board-empty">Loading…</div>`);
       });
     }
     try {
@@ -1336,7 +1336,7 @@
       // in place rather than replacing it with an error message.
       if (lastEntries.length === 0 && !pendingResult) {
         withPauseSuppressed(() => {
-          boardListEl.innerHTML = `<div class="srv-board-empty">Couldn't load leaderboard.</div>`;
+          window.SwervleSetHtml(boardListEl, `<div class="srv-board-empty">Couldn't load leaderboard.</div>`);
         });
       }
     }
@@ -1405,7 +1405,7 @@
   function buildToggleRow(wrap, { key, label, onLabel, offLabel, reloadRequired }, { storageValueMeansHidden } = {}) {
     const row = document.createElement("label");
     row.className = "srv-setting-label";
-    row.innerHTML = `<span>${escapeHtml(label)}</span><input type="checkbox" />`;
+    window.SwervleSetHtml(row, `<span>${escapeHtml(label)}</span><input type="checkbox" />`);
     const input = row.querySelector("input");
     const stored = localStorage.getItem(key) === "true";
     input.checked = storageValueMeansHidden ? !stored : stored;
@@ -1431,7 +1431,7 @@
     const overlay = document.createElement("div");
     overlay.className = "srv-utils-overlay";
     overlay.style.display = "none";
-    overlay.innerHTML = `
+    window.SwervleSetHtml(overlay, `
       <div class="srv-utils-panel">
         <div class="srv-utils-header">
           <strong>Swervle Utils</strong>
@@ -1448,7 +1448,7 @@
         <button type="button" class="srv-btn srv-utils-hud-editor-btn">Open HUD Editor</button>
         <div class="srv-utils-hint">Some settings need a page reload to take effect.</div>
       </div>
-    `;
+    `);
     document.body.appendChild(overlay);
     overlay.addEventListener("click", (e) => {
       if (e.target === overlay) closeUtilsMenu();
@@ -1733,13 +1733,13 @@
       // close rather than left sitting behind the real thing.
       preview: (el) => {
         if (el.innerHTML.trim() !== "") return null;
-        el.innerHTML = `
+        window.SwervleSetHtml(el, `
           <div class="srv-popup-row srv-popup-cp">CHECKPOINT 1</div>
           <div class="srv-popup-row srv-popup-delta srv-split-ahead">-0.42s</div>
           <div class="srv-popup-row srv-popup-speed">+1.3 spd</div>
-        `;
+        `);
         return () => {
-          el.innerHTML = "";
+          window.SwervleSetHtml(el, "");
         };
       },
     },
@@ -1824,13 +1824,13 @@
     window.SwervleHudEditorActive = true;
     const overlay = document.createElement("div");
     overlay.className = "srv-hud-editor-overlay";
-    overlay.innerHTML = `
+    window.SwervleSetHtml(overlay, `
       <div class="srv-hud-editor-toolbar">
         <strong>HUD Editor</strong>
         <span class="srv-hud-editor-hint">Drag to move · scroll to resize · shift-click to reset</span>
         <button type="button" class="srv-btn srv-hud-editor-done">Done</button>
       </div>
-    `;
+    `);
     document.body.appendChild(overlay);
     overlay.querySelector(".srv-hud-editor-done").addEventListener("click", closeHudEditor);
 
@@ -1897,7 +1897,7 @@
 
       const handle = document.createElement("div");
       handle.className = "srv-hud-editor-handle";
-      handle.innerHTML = `<span class="srv-hud-editor-handle-label">${escapeHtml(entry.label)}</span>`;
+      window.SwervleSetHtml(handle, `<span class="srv-hud-editor-handle-label">${escapeHtml(entry.label)}</span>`);
       overlay.appendChild(handle);
       positionHandleOver(handle, el);
       attachHudDragResize(handle, el, entry);

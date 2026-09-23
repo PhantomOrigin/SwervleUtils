@@ -577,10 +577,10 @@
   async function wearLivery(carView, livery) {
     if (livery == null || typeof livery.design !== "string") return null;
     const ready = window.__srv.ready;
-    if (!ready?.liveryModuleUrl) return null;
+    if (typeof ready?.loadLiveryModule !== "function") return null;
     try {
       if (!liveryModulePromise) {
-        liveryModulePromise = import(ready.liveryModuleUrl).catch((err) => {
+        liveryModulePromise = ready.loadLiveryModule().catch((err) => {
           liveryModulePromise = null; // don't poison future spawns with a cached rejection
           throw err;
         });
