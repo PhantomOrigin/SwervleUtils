@@ -181,10 +181,16 @@ function isNewerVersion(a, b) {
 }
 
 async function checkForNewRelease() {
-  const { srvVersionCheck: cached } = await chrome.storage.local.get("srvVersionCheck");
+  const { srvVersionCheck: rawCached } = await chrome.storage.local.get("srvVersionCheck");
+  const currentVersion = chrome.runtime.getManifest().version;
+  // A cached result only counts if it was computed for THIS installed
+  // version — its `updateAvailable` was worked out against whatever version
+  // was installed at the time, so after upgrading (say 1.9 -> 1.10) a stale
+  // "update available" answer would otherwise keep showing for up to an
+  // hour even though the extension is now current.
+  const cached = rawCached?.currentVersion === currentVersion ? rawCached : null;
   if (cached?.checkedAt && Date.now() - cached.checkedAt < VERSION_CHECK_MIN_INTERVAL_MS) return cached;
 
-  const currentVersion = chrome.runtime.getManifest().version;
   try {
     // Explicit Accept header — GitHub's REST API convention, and avoids
     // ambiguity about response format.
