@@ -232,6 +232,8 @@ async function initializeRules() {
   await syncRules();
 }
 
+const RESYNC_AFTER_MS = 5 * 60 * 1000;
+
 chrome.runtime.onInstalled.addListener(() => initializeRules());
 chrome.runtime.onStartup.addListener(() => initializeRules());
 
@@ -254,13 +256,20 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       : null;
 
     const { srvPatchState } = await chrome.storage.local.get("srvPatchState");
-    const isCurrent = srvPatchState?.ok && srvPatchState.mainFilename === msg.liveMainFilename;
-    if (isCurrent) {
+    const mainMatches = srvPatchState?.ok && srvPatchState.mainFilename === msg.liveMainFilename;
+    // The main filename matching isn't enough on its own: the second (RV
+    // chunk) redirect can change without the main bundle's name changing,
+    // and a stale rule for the old chunk breaks the page's module graph
+    // outright. So also re-check state.json when the last sync is a few
+    // minutes old — one tiny fetch.
+    const syncedRecently = Date.now() - (srvPatchState?.syncedAt ?? 0) < RESYNC_AFTER_MS;
+    if (mainMatches && syncedRecently) {
       sendResponse({ staleOnLoad: false, updateNotice });
       return;
     }
     const result = await syncRules();
-    sendResponse({ staleOnLoad: true, syncOk: result.ok, updateNotice });
+    const changed = !mainMatches || result.tvFilename !== srvPatchState?.tvFilename || result.mainFilename !== srvPatchState?.mainFilename;
+    sendResponse({ staleOnLoad: changed, syncOk: result.ok, updateNotice });
   })();
   return true; // keep the message channel open for the async sendResponse above
 });
