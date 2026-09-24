@@ -364,17 +364,33 @@
   flex: 1;
   color: #b7bdca;
 }
-.srv-split-time {
-  color: #8a93a6;
+.srv-split-cols {
+  display: flex;
+  gap: 6px;
+  padding: 3px 8px;
+  font-size: 0.5rem;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  color: rgba(255, 248, 233, 0.4);
 }
-.srv-split-delta {
-  min-width: 44px;
+.srv-split-cols span:first-child {
+  flex: 1;
+}
+.srv-split-cols span:not(:first-child),
+.srv-split-pb,
+.srv-split-you {
+  min-width: 62px;
   text-align: right;
 }
-.srv-split-speed {
-  min-width: 34px;
-  text-align: right;
+.srv-split-pb {
   color: #8a93a6;
+}
+.srv-split-you {
+  color: #e6e9f0;
+}
+.srv-split-gold {
+  color: #ffd23f !important;
+  font-weight: 700;
 }
 .srv-split-ahead {
   color: #6bf0a3;
@@ -1107,4 +1123,10 @@ html.srv-hide-own-input-hud .srv-own-input-hud {
   padding: 2px 6px;
   border-radius: 4px;
   white-space: nowrap;
+}
+
+/* Site's own keyboard-focus highlight on the game canvas (yellow border). */
+html.srv-hide-focus-border .game-canvas:focus-visible,
+html.srv-hide-focus-border .swervle-root .game-canvas:focus-visible {
+  outline: none !important;
 }

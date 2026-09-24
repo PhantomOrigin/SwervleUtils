@@ -87,11 +87,26 @@ export async function discoverAndFetchMainBundle(origin) {
   return { mainUrl, mainFilename, mainRawSrc };
 }
 
+// The raceTelemetry patch anchors on the replay class's `get finished()`.
+const RV_CLASS_MARKER = /get finished\(\)\{return this\.#s===`finished`\|\|this\.#s===`exhausted`\}/;
+
+// The chunk the main bundle imports RV from is sometimes just a re-export
+// hub, with the class itself defined in one of ITS imports — so if the
+// marker isn't in the first chunk, look one level down for the real one.
 export async function fetchTerrainViewChunk(origin, rvChunkPath) {
-  const tvUrl = new URL(rvChunkPath, origin + "/assets/x").href;
-  const tvFilename = tvUrl.split("/").pop();
-  const tvRawSrc = await fetch(tvUrl).then((r) => r.text());
-  return { tvUrl, tvFilename, tvRawSrc };
+  const fetchChunk = async (path, base) => {
+    const url = new URL(path, base).href;
+    return { tvUrl: url, tvFilename: url.split("/").pop(), tvRawSrc: await fetch(url).then((r) => r.text()) };
+  };
+  const first = await fetchChunk(rvChunkPath, origin + "/assets/x");
+  if (RV_CLASS_MARKER.test(first.tvRawSrc)) return first;
+
+  const deps = [...new Set([...first.tvRawSrc.matchAll(/from"(\.\/[^"]+\.js)"/g)].map((m) => m[1]))];
+  for (const dep of deps) {
+    const candidate = await fetchChunk(dep, first.tvUrl);
+    if (RV_CLASS_MARKER.test(candidate.tvRawSrc)) return candidate;
+  }
+  return first; // nothing matched — the patch will report itself as skipped
 }
 
 // Auto-derives every minified identifier this patch set needs from stable,
@@ -155,7 +170,10 @@ export function deriveIdentifiers(mainSrc, mainRawSrc) {
   }
   {
     if (names.RV) {
-      const re = new RegExp(`import\\{[^}]*\\b${names.RV}\\b[^}]*\\}from"(\\./[^"]+)"`);
+      // Match the LOCAL binding (`x as NAME`, or a bare NAME) — not merely any
+      // mention of it, which also hits `NAME as other` in an unrelated import.
+      const local = names.RV.replace(/\$/g, "\\$");
+      const re = new RegExp(`import\\{[^}]*(?:[{,]|\\bas\\s+)\\s*${local}(?=\\s*[,}])[^}]*\\}from"(\\./[^"]+)"`);
       const m = mainRawSrc.match(re);
       names.rvChunkPath = m?.[1] ?? null;
     }
@@ -223,7 +241,7 @@ export function patchMainBundle(mainSrc, mainRawSrc, names, origin, results, log
       /[A-Za-z0-9_$]+=[A-Za-z0-9_$]+\(this\.#[A-Za-z0-9_$]+\),[A-Za-z0-9_$]+=this\.#[A-Za-z0-9_$]+\.profile\.hudUpdateTickInterval;/,
       () =>
         "try{window.__srv?.onTick?.({tick:s,nextGateIndex:a.nextGateIndex," +
-        `gateCount:this.${names.raceManifest}?.track.gates.length??0,speed:c.speed,position:c.position,phase:a.phase,` +
+        `gateCount:this.${names.raceManifest}?.track.gates.length??0,speed:c.speed,position:c.position,phase:a.phase,displayTimeMs:a.displayTimeMs,` +
         "gear:c.gear,shiftTimer:c.shiftTimer});}catch(e){console.error(e);}"
     );
   } else {
@@ -367,7 +385,12 @@ export function patchTerrainViewChunk(tvSrc, results, log = console) {
     () =>
       "get raceTelemetry(){if(this.#o==null)return null;" +
       "let e=this.#o.model.base.requireCar(this.#o.model.carEntityId).captureTelemetry();" +
-      "return{nextGateIndex:this.#o.model.raceState.nextGateIndex,position:e.position,speed:e.speed,tick:this.#c}}"
+      // tick is RACE-relative (ticks since the race started), exactly like the
+      // live onTick telemetry — the replay's own counter (#c) also spans the
+      // pre-race countdown, which made PB splits never line up with live ones.
+      "let r=this.#o.model.raceState,n=r.startedTick;" +
+      "return{nextGateIndex:r.nextGateIndex,position:e.position,speed:e.speed," +
+      "tick:n===null?0:Math.max(0,this.#o.simulation.tick-n),displayTimeMs:r.displayTimeMs}}"
   );
 
   return { patchedSrc: src };

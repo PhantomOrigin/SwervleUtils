@@ -738,7 +738,7 @@
       const tel = rv.raceTelemetry;
       if (tel && tel.nextGateIndex > lastGateIndex) {
         for (let g = lastGateIndex; g < tel.nextGateIndex; g++) {
-          gates.push({ gateIndex: g, tick: tel.tick, speed: tel.speed });
+          gates.push({ gateIndex: g, tick: tel.tick, speed: tel.speed, timeMs: Number.isFinite(tel.displayTimeMs) ? tel.displayTimeMs : null });
         }
         lastGateIndex = tel.nextGateIndex;
       }

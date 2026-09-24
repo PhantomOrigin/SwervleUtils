@@ -980,10 +980,13 @@
     renderRows(computeRows());
   }
 
-  function fmtTicks(durationTicks, tickRate = window.SwervleDecoder.TICK_RATE) {
-    const totalSec = durationTicks / tickRate;
+  // Prefers the server's exact displayTimeMs (finish times are sub-tick, so
+  // durationTicks / 60 is off by a few ms); custom runs only have ticks.
+  // Always 3 decimals, like the site's own timer.
+  function fmtRowTime(row, tickRate = window.SwervleDecoder.TICK_RATE) {
+    const totalSec = Number.isFinite(row.displayTimeMs) ? row.displayTimeMs / 1000 : row.durationTicks / tickRate;
     const m = Math.floor(totalSec / 60);
-    const s = (totalSec % 60).toFixed(2).padStart(5, "0");
+    const s = (totalSec % 60).toFixed(3).padStart(6, "0");
     return m > 0 ? `${m}:${s}` : `${s}s`;
   }
 
@@ -1033,7 +1036,7 @@
           const cls = [row.isYou && "srv-board-you", row.pending && "srv-board-pending", row.isCustom && "srv-board-custom"]
             .filter(Boolean)
             .join(" ");
-          const timeText = row.pending ? escapeHtml(row.pendingTimeText) : fmtTicks(row.durationTicks);
+          const timeText = row.pending ? escapeHtml(row.pendingTimeText) : fmtRowTime(row);
           // data-srv-row-index rather than data-run-id to key back into
           // `rows` below — custom runs don't collide with each other (each
           // gets a fresh id), but nothing stops a real leaderboard row from
@@ -1327,7 +1330,7 @@
       nextAutoBoardLoadAt = 0;
       pendingResult = null; // real data has arrived — stop overlaying the guess
       renderRows(computeRows());
-      window.SwervleSplits?.setPb(lastYourEntry?.publicRunId ?? null, lastYourEntry?.publicDisplayName ?? null);
+      window.SwervleSplits?.setPb(lastYourEntry?.publicRunId ?? null, lastYourEntry?.publicDisplayName ?? null, dailyId);
     } catch (err) {
       console.error("[Swervle Replay Viewer] failed to load leaderboard", err);
       boardFailures++;
@@ -1389,6 +1392,9 @@
     { key: "srv-hide-watch-controls", label: "Watch controls (input keys, scrub bar, stop-watching bar)" },
     { key: "srv-hide-own-input-hud", label: "Live input keys (your own driving)" },
     { key: "srv-hide-gear-hud", label: "Gear shift HUD" },
+    // The yellow outline the site draws around the game canvas when it has
+    // keyboard focus (i.e. right after it grabs your mouse) — see styles.css.
+    { key: "srv-hide-focus-border", label: "Yellow border around the game when focused" },
     // Gate/checkpoint markers live in srv-main.js (the MAIN-world script),
     // which only reads localStorage once at document_start like the
     // camera/control settings above — so, unlike the rest of this list,
