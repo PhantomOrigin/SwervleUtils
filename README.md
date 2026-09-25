@@ -1,4 +1,6 @@
-# Swervle Utils
+# Swervle Utils (Unofficial)
+
+An unofficial, community-made extension for [swervle.com](https://swervle.com). It is not affiliated with or endorsed by Swervle.
 
 - **Replay Viewer** Allows you to view individual runs and their inputs, with adjustable replay speed and rewind or fast forward.
 - **Ghost Viewer** and **Leaderboard HUD** allow you to view multiple ghosts simultaneously without having to reload the page
@@ -15,18 +17,22 @@
 
 Download the zip for your browser from the latest [release](../../releases/latest) and unzip it.
 
-### Chrome / Edge / Brave
+### Chromium (Chrome / Edge / Brave)
 
 1. Download and unzip 'SwervleUtilsChromium.zip'
 2. Go to `chrome://extensions`.
 3. Enable **Developer mode** (top right).
 4. Click **Load unpacked** and select the unzipped folder.
 
-### Firefox (experimental, Firefox 140 or newer)
+### Firefox (Firefox 140 or newer)
 
 1. Download 'SwervleUtilsFirefox.zip'
 2. Go to `about:debugging#/runtime/this-firefox`.
 3. Click **Load Temporary Add-on** and select the zip. Firefox removes it when it closes, so this needs repeating each time.
+
+## Extension Settings
+
+Extension settings can be accessed from the in game settings menu on swervle.com. Press the 'Swervle Utils' button at the bottom of the in game settings menu.
 
 ## Building
 

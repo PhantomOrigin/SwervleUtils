@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Swervle Utils",
-  "version": "1.12",
-  "description": "A clientside extension with some basic quality of life improvements.",
+  "name": "Swervle Utils (Unofficial)",
+  "version": "1.13",
+  "description": "Unofficial, community-made quality of life improvements for swervle.com. Not affiliated with or endorsed by Swervle.",
   "icons": {
     "16": "icons/icon-16.png",
     "32": "icons/icon-32.png",
@@ -20,7 +20,7 @@
     "service_worker": "background.js"
   },
   "action": {
-    "default_title": "Swervle Utils — badge shows patch-sync status (blank = ok, ! = some patches skipped upstream, X = couldn't reach GitHub)"
+    "default_title": "Swervle Utils (Unofficial) — badge shows patch-sync status (blank = ok, ! = some patches skipped upstream, X = couldn't reach GitHub)"
   },
   "content_scripts": [
     {

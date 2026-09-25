@@ -110,25 +110,51 @@ function syncRules() {
 }
 
 // swervle.com's own CSP sends a `script-src` allowlist (its origin plus
-// specific ad/analytics/Cloudflare domains) that includes neither
-// cdn.jsdelivr.net nor raw.githubusercontent.com — confirmed directly from
-// a real "Refused to load the script ... violates ... Content-Security-
-// Policy" console error. That's the browser doing exactly what CSP is for;
-// the redirect rules above substitute a different URL for the real one,
-// but the resulting request still has to clear the page's own CSP
-// afterward, and this site's does not allow either of the domains this
-// extension redirects to. Since MV3 gives extensions no way to rewrite a
-// response BODY (only headers/redirects), stripping the CSP header on the
-// swervle.com document itself is the only available lever. This does trade
-// away whatever XSS protection that header was providing on swervle.com —
-// acceptable for a personal extension the user already trusts to rewrite
-// the site's own code wholesale, but worth knowing it's happening.
+// specific ad/analytics/Cloudflare domains) that does not include
+// cdn.jsdelivr.net — the host the redirect rules above send the patched
+// scripts to — so without a change the browser refuses to run them ("Refused
+// to load the script ... violates ... Content-Security-Policy").
 //
-// This rule is static (never depends on state.json), so it's registered
-// once and left alone — unlike MAIN_RULE_ID/TV_RULE_ID, syncRules() never
-// touches CSP_RULE_ID on later runs.
-function ensureCspRuleRegistered() {
-  return chrome.declarativeNetRequest.updateDynamicRules({
+// This does NOT remove the header. It fetches swervle.com's real CSP, adds
+// exactly one origin (jsDelivr) to its `script-src`, and re-sends the
+// otherwise identical policy, so every other protection the site set stays
+// in force. (declarativeNetRequest can only set/append/remove a header, not
+// edit part of its value, hence rebuilding the whole value from the live
+// one; a second appended policy would only ever tighten, never loosen.)
+//
+// Re-run on each startup and each periodic re-sync so a change to the site's
+// own policy is picked up. If swervle.com can't be reached, whatever rule
+// was registered last is left in place.
+const CSP_EXTRA_SCRIPT_SRC = "https://cdn.jsdelivr.net";
+
+function addScriptSrcOrigin(csp, origin) {
+  const directives = csp.split(";").map((d) => d.trim()).filter(Boolean);
+  const idx = directives.findIndex((d) => /^script-src(\s|$)/i.test(d));
+  if (idx !== -1) {
+    if (!directives[idx].split(/\s+/).includes(origin)) directives[idx] += ` ${origin}`;
+  } else {
+    // No script-src: scripts fall back to default-src, so copy it and extend.
+    const def = directives.find((d) => /^default-src(\s|$)/i.test(d));
+    if (!def) return null; // no script restriction at all — nothing to widen
+    directives.push(`${def.replace(/^default-src/i, "script-src")} ${origin}`);
+  }
+  return directives.join("; ");
+}
+
+async function ensureCspRuleRegistered() {
+  const res = await fetch("https://swervle.com/", { cache: "no-store" });
+  const csp = res.headers.get("content-security-policy");
+  if (!csp) {
+    // The site currently sends no CSP, so there is nothing to relax.
+    await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: [CSP_RULE_ID] });
+    return;
+  }
+  const widened = addScriptSrcOrigin(csp, CSP_EXTRA_SCRIPT_SRC);
+  if (widened === null) {
+    await chrome.declarativeNetRequest.updateDynamicRules({ removeRuleIds: [CSP_RULE_ID] });
+    return;
+  }
+  await chrome.declarativeNetRequest.updateDynamicRules({
     removeRuleIds: [CSP_RULE_ID],
     addRules: [
       {
@@ -136,7 +162,7 @@ function ensureCspRuleRegistered() {
         priority: 1,
         action: {
           type: "modifyHeaders",
-          responseHeaders: [{ header: "content-security-policy", operation: "remove" }],
+          responseHeaders: [{ header: "content-security-policy", operation: "set", value: widened }],
         },
         condition: { urlFilter: "||swervle.com/", resourceTypes: ["main_frame"] },
       },
@@ -227,7 +253,7 @@ async function initializeRules() {
   try {
     await ensureCspRuleRegistered();
   } catch (err) {
-    console.error("[srv] failed to register CSP-strip rule:", err);
+    console.error("[srv] failed to update CSP rule:", err);
   }
   await syncRules();
 }
@@ -267,6 +293,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
       sendResponse({ staleOnLoad: false, updateNotice });
       return;
     }
+    ensureCspRuleRegistered().catch((err) => console.error("[srv] failed to update CSP rule:", err));
     const result = await syncRules();
     const changed = !mainMatches || result.tvFilename !== srvPatchState?.tvFilename || result.mainFilename !== srvPatchState?.mainFilename;
     sendResponse({ staleOnLoad: changed, syncOk: result.ok, updateNotice });
