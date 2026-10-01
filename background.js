@@ -68,19 +68,32 @@ function syncRules() {
       const state = await res.json();
       if (!state?.mainFilename || !state?.tvFilename) throw new Error("state.json is missing mainFilename/tvFilename");
 
+      // jsDelivr serves these two files with a 7-day browser cache
+      // (confirmed: Cache-Control: max-age=604800) — fine for ITS OWN edge
+      // cache, but it means a player's browser can keep reusing a patched
+      // file from BEFORE the repatch workflow last updated it, even across
+      // a hard reload, since the redirect destination URL never changes on
+      // its own. Appending state.json's own patchedAt (which only changes
+      // when the patched content actually did, see tools/patch-bundle.mjs's
+      // unchanged-skip) makes the redirect target a genuinely different URL
+      // exactly when the content is genuinely different — a normal cache
+      // entry the rest of the week, a guaranteed fresh fetch the moment
+      // something changed.
+      const cacheBust = `?v=${encodeURIComponent(state.patchedAt ?? Date.now())}`;
+
       await chrome.declarativeNetRequest.updateDynamicRules({
         removeRuleIds: [MAIN_RULE_ID, TV_RULE_ID],
         addRules: [
           {
             id: MAIN_RULE_ID,
             priority: 1,
-            action: { type: "redirect", redirect: { url: `${CDN_BASE}/patched-bundle.js` } },
+            action: { type: "redirect", redirect: { url: `${CDN_BASE}/patched-bundle.js${cacheBust}` } },
             condition: { urlFilter: mainBundleUrlFilter(state.mainFilename), resourceTypes: ["script"] },
           },
           {
             id: TV_RULE_ID,
             priority: 1,
-            action: { type: "redirect", redirect: { url: `${CDN_BASE}/patched-terrainview.js` } },
+            action: { type: "redirect", redirect: { url: `${CDN_BASE}/patched-terrainview.js${cacheBust}` } },
             condition: { urlFilter: `||swervle.com/assets/${state.tvFilename}`, resourceTypes: ["script"] },
           },
         ],
