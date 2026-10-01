@@ -1152,6 +1152,7 @@
           displayName: row.publicDisplayName,
           isCustom: row.isCustom === true,
           localBytes: row.localBytes,
+          livery: row.livery ?? null,
         };
         rowEl.querySelector("[data-srv-anchor]").replaceWith(buildButtonGroup(info));
       });
