@@ -132,7 +132,7 @@ async function main() {
   const mainRewritten = rewriteRelativeChunkRefs(ORIGIN, "main bundle", mainRawSrc);
   const names = deriveIdentifiers(mainRewritten, mainRawSrc);
   console.log("Derived identifiers:", names);
-  const { patchedSrc: mainSrc } = patchMainBundle(mainRewritten, mainRawSrc, names, ORIGIN, results);
+  const { patchedSrc: mainSrc, liveryChunkUrl } = patchMainBundle(mainRewritten, mainRawSrc, names, ORIGIN, results);
 
   writeFileSync(join(OUT_DIR, "patched-bundle.js"), mainSrc, "utf8");
   console.log(`Patched main bundle written to patched-bundle.js (${mainSrc.length} bytes).`);
@@ -180,6 +180,13 @@ async function main() {
     const newState = {
       mainFilename,
       tvFilename,
+      // The URL the game's own livery chunk currently lives at — see
+      // srv-main.js's loadLiveryModule/window.__srvLiveryUrl for why this
+      // needs to be kept live instead of only baked into the patched
+      // bundle text at patch time (that copy goes stale on every
+      // swervle.com redeploy, same as mainFilename/tvFilename, but unlike
+      // those two nothing else ever refreshes it without this).
+      liveryChunkUrl,
       patchCount: results.length,
       failedPatches: failed.map((r) => `${r.file}/${r.name}`),
     };

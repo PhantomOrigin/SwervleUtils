@@ -952,9 +952,20 @@
     });
 
     const fileInput = boardEl.querySelector(".srv-board-file-input");
-    boardEl.querySelector(".srv-board-add").addEventListener("click", () => fileInput.click());
+    // Picking a skin happens BEFORE the file picker: openSkinPicker()
+    // resolves with the chosen livery (or null for a random colour, same
+    // as a run with no livery at all gets — see colorForKey in
+    // srv-main.js) and only then opens the file dialog.
+    boardEl.querySelector(".srv-board-add").addEventListener("click", async () => {
+      const outcome = await openSkinPicker();
+      if (outcome === "cancel") return;
+      pendingCustomRunLivery = outcome; // null (random colour) or {design}
+      fileInput.click();
+    });
     fileInput.addEventListener("change", async () => {
       const file = fileInput.files?.[0];
+      const livery = pendingCustomRunLivery;
+      pendingCustomRunLivery = null;
       fileInput.value = ""; // so picking the exact same file again still fires "change"
       if (!file) return;
       try {
@@ -964,6 +975,7 @@
           publicDisplayName: run.publicDisplayName,
           durationTicks: run.durationTicks,
           bytes: run.bytes,
+          livery,
         });
         renderRows(computeRows());
         showToast(`Loaded "${run.publicDisplayName}" as a custom run for this map.`);
@@ -971,6 +983,87 @@
         console.error("[Swervle Replay Viewer] failed to load local replay file", err);
         showToast(`Couldn't load that file (${err.message}).`, true);
       }
+    });
+  }
+
+  let pendingCustomRunLivery = null; // set right before fileInput.click(), consumed on "change"
+
+  // ---- skin picker: shown before loading a custom run's file ----
+  // Two choices: a random-hue flat colour (what a run with NO livery
+  // already gets — see colorForKey in srv-main.js — this just makes that
+  // the deliberate choice instead of only a side effect of having no
+  // livery.design), or one of your own saved liveries from swervle's
+  // garage (SwervleAPI.getMyLiveryLibrary — your account's real paint
+  // designs, same format a leaderboard entry's carPaint carries).
+  // Resolves to: null (random colour), {design} (chosen livery), or the
+  // string "cancel" (closed without choosing).
+  let skinPickerEl = null;
+  function buildSkinPicker() {
+    if (skinPickerEl) return skinPickerEl;
+    const overlay = document.createElement("div");
+    overlay.className = "srv-utils-overlay";
+    overlay.style.display = "none";
+    window.SwervleSetHtml(overlay, `
+      <div class="srv-utils-panel srv-skin-panel">
+        <div class="srv-utils-header">
+          <strong>Choose a skin</strong>
+          <button class="srv-utils-close" type="button" title="Close">&times;</button>
+        </div>
+        <button type="button" class="srv-btn srv-skin-random-btn">Random coloured default skin</button>
+        <div class="srv-utils-section-title srv-skin-garage-title">FROM YOUR GARAGE</div>
+        <div class="srv-skin-garage-list"><div class="srv-skin-garage-status">Loading…</div></div>
+      </div>
+    `);
+    document.body.appendChild(overlay);
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) resolveSkinPicker("cancel");
+    });
+    overlay.querySelector(".srv-utils-close").addEventListener("click", () => resolveSkinPicker("cancel"));
+    overlay.querySelector(".srv-skin-random-btn").addEventListener("click", () => resolveSkinPicker(null));
+    skinPickerEl = overlay;
+    return overlay;
+  }
+
+  let skinPickerResolve = null;
+  function resolveSkinPicker(value) {
+    if (skinPickerEl) skinPickerEl.style.display = "none";
+    const resolve = skinPickerResolve;
+    skinPickerResolve = null;
+    resolve?.(value);
+  }
+
+  async function openSkinPicker() {
+    const overlay = buildSkinPicker();
+    const listEl = overlay.querySelector(".srv-skin-garage-list");
+    window.SwervleSetHtml(listEl, `<div class="srv-skin-garage-status">Loading…</div>`);
+    overlay.style.display = "flex";
+
+    // Fetched fresh every open rather than cached — a livery saved in the
+    // garage since the last time this was opened should show up without
+    // needing a page reload.
+    window.SwervleAPI.getMyLiveryLibrary().then((entries) => {
+      if (overlay.style.display === "none") return; // closed before this resolved
+      if (!entries) {
+        window.SwervleSetHtml(listEl, `<div class="srv-skin-garage-status">Sign in to swervle to use a garage skin.</div>`);
+        return;
+      }
+      if (entries.length === 0) {
+        window.SwervleSetHtml(listEl, `<div class="srv-skin-garage-status">No saved liveries in your garage yet.</div>`);
+        return;
+      }
+      window.SwervleSetHtml(listEl, "");
+      for (const entry of entries) {
+        const row = document.createElement("button");
+        row.type = "button";
+        row.className = "srv-skin-garage-row";
+        row.textContent = entry.name || entry.slotId;
+        row.addEventListener("click", () => resolveSkinPicker({ design: entry.design }));
+        listEl.appendChild(row);
+      }
+    });
+
+    return new Promise((resolve) => {
+      skinPickerResolve = resolve;
     });
   }
 
@@ -1110,6 +1203,7 @@
       isCustom: true,
       localBytes: r.bytes,
       displayName: r.publicDisplayName,
+      livery: r.livery ?? null,
     }));
   }
 
@@ -2000,6 +2094,13 @@
       if (!liveMainFilename) return;
       chrome.runtime.sendMessage({ type: "srv:pageLoaded", liveMainFilename }, (response) => {
         if (chrome.runtime.lastError || !response) return;
+
+        // Pushed on every page load, not just when something changed —
+        // cheap (one CustomEvent), and srv-main.js only acts on it when a
+        // real URL comes through. Keeps window.__srvLiveryUrl (see
+        // srv-main.js) from ever drifting too far behind swervle.com's
+        // actual current livery chunk.
+        if (response.liveryChunkUrl) window.SwervleBridge.setLiveryUrl(response.liveryChunkUrl);
 
         if (response.staleOnLoad) {
           // Persistent, not the usual auto-dismissing toast: this can break

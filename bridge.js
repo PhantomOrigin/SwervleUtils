@@ -55,6 +55,12 @@
     spawnGhost: (key, states, displayName, livery) =>
       request("srv:spawnGhost", { key, states, displayName, livery }, "srv:spawnGhostResult"),
     despawnGhost: (key) => document.dispatchEvent(new CustomEvent("srv:despawnGhost", { detail: toPage({ key }) })),
+    // Fire-and-forget, same shape as despawnGhost above — keeps
+    // srv-main.js's window.__srvLiveryUrl current so a livery still loads
+    // after swervle.com redeploys (see background.js/srv-main.js). `url`
+    // may be null (nothing known yet / patcher couldn't derive one), in
+    // which case srv-main.js just keeps using its patch-time fallback.
+    setLiveryUrl: (url) => document.dispatchEvent(new CustomEvent("srv:setLiveryUrl", { detail: toPage({ url }) })),
     setCameraFollow: (key) =>
       document.dispatchEvent(new CustomEvent("srv:setCameraFollow", { detail: toPage({ key }) })),
     // { gates: [{gateIndex,tick,speed}], totalTicks, error? }

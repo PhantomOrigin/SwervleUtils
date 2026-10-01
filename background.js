@@ -86,7 +86,18 @@ function syncRules() {
         ],
       });
 
-      const result = { ok: true, mainFilename: state.mainFilename, tvFilename: state.tvFilename, syncedAt: Date.now() };
+      const result = {
+        ok: true,
+        mainFilename: state.mainFilename,
+        tvFilename: state.tvFilename,
+        // Passed through as-is (may be null/undefined on an older
+        // state.json, or if the patcher couldn't derive it) — see
+        // srv-main.js's loadLiveryModule for why the page needs this kept
+        // fresh across swervle.com redeploys, not just whatever was baked
+        // into the patched bundle at patch time.
+        liveryChunkUrl: state.liveryChunkUrl ?? null,
+        syncedAt: Date.now(),
+      };
       await chrome.storage.local.set({ srvPatchState: result });
       setBadge(state.failedPatches?.length > 0 ? "warn" : "ok");
       console.log(`[srv sync] rules now match main=${state.mainFilename} tv=${state.tvFilename}`);
@@ -290,13 +301,13 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     // minutes old — one tiny fetch.
     const syncedRecently = Date.now() - (srvPatchState?.syncedAt ?? 0) < RESYNC_AFTER_MS;
     if (mainMatches && syncedRecently) {
-      sendResponse({ staleOnLoad: false, updateNotice });
+      sendResponse({ staleOnLoad: false, updateNotice, liveryChunkUrl: srvPatchState?.liveryChunkUrl ?? null });
       return;
     }
     ensureCspRuleRegistered().catch((err) => console.error("[srv] failed to update CSP rule:", err));
     const result = await syncRules();
     const changed = !mainMatches || result.tvFilename !== srvPatchState?.tvFilename || result.mainFilename !== srvPatchState?.mainFilename;
-    sendResponse({ staleOnLoad: changed, syncOk: result.ok, updateNotice });
+    sendResponse({ staleOnLoad: changed, syncOk: result.ok, updateNotice, liveryChunkUrl: result.liveryChunkUrl ?? null });
   })();
   return true; // keep the message channel open for the async sendResponse above
 });

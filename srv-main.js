@@ -63,6 +63,15 @@
     window.__srvSuppressPause = suppressPauseCount > 0;
   });
 
+  // Kept current by content.js (see bridge.js's setLiveryUrl) across
+  // swervle.com redeploys — see wearLivery/loadLiveryModule below for why
+  // this can't just be a value baked into the patched bundle once at patch
+  // time. Left undefined until the first push arrives, so loadLiveryModule
+  // falls back to its own patch-time literal until then.
+  document.addEventListener("srv:setLiveryUrl", (e) => {
+    if (e.detail?.url) window.__srvLiveryUrl = e.detail.url;
+  });
+
   // Staleness detection/self-healing used to live here (compare the page's
   // actual <script type=module> src against a filename baked in at the last
   // manual `tools/patch-bundle.mjs` run, and warn content.js if they'd

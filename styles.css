@@ -1051,6 +1051,41 @@ html.srv-hide-own-input-hud .srv-own-input-hud {
   color: rgba(255, 248, 233, 0.58);
   margin-bottom: 6px;
 }
+.srv-skin-panel .srv-skin-random-btn {
+  width: 100%;
+  margin-bottom: 14px;
+}
+.srv-skin-garage-title {
+  margin-bottom: 6px;
+}
+.srv-skin-garage-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 40vh;
+  overflow-y: auto;
+}
+.srv-skin-garage-status {
+  font-size: 12px;
+  color: #8a93a6;
+  padding: 6px 2px;
+}
+.srv-skin-garage-row {
+  text-align: left;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  color: #e6e9f0;
+  padding: 7px 10px;
+  font-size: 12px;
+  font-family: sans-serif;
+  cursor: pointer;
+}
+.srv-skin-garage-row:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
 .srv-utils-hud-toggles .srv-setting-label,
 .srv-utils-driving-toggles .srv-setting-label {
   display: flex;

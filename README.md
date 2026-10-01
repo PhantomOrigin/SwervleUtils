@@ -1,4 +1,4 @@
-# Swervle Utils (Unofficial)
+# Swervle Utils
 
 An unofficial, community-made extension for [swervle.com](https://swervle.com). It is not affiliated with or endorsed by Swervle.
 

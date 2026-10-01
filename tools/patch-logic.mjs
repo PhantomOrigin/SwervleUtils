@@ -225,7 +225,17 @@ export function patchMainBundle(mainSrc, mainRawSrc, names, origin, results, log
         `buildNameplate:${names.buildNameplate},viewParent:this.${names.playerSceneManager}.viewParent,` +
         `materialRegistrar:this.${names.playerSceneManager}.materialRegistrar,` +
         `modifiers:this.${names.physicsModifiers},track:i.track,assetFactory:this.${names.assetFactory},` +
-        `liveryModuleUrl:${JSON.stringify(liveryChunkUrl)},loadLiveryModule:()=>import(${JSON.stringify(liveryChunkUrl)}),` +
+        // loadLiveryModule prefers window.__srvLiveryUrl (kept fresh across
+        // swervle.com redeploys by background.js's periodic re-sync + a
+        // "srv:setLiveryUrl" push to this page — see background.js/
+        // bridge.js/srv-main.js) over the URL baked in here at PATCH time.
+        // That literal goes stale the moment swervle.com redeploys again
+        // (its chunk hashes change with it) — unlike the main/TV script
+        // redirects, nothing else here ever refreshes it, so without this
+        // fallback-to-live-value indirection every ghost with a real
+        // livery would silently render with no livery (wearLivery's own
+        // catch) until the next scheduled repatch, up to 15 minutes later.
+        `liveryModuleUrl:${JSON.stringify(liveryChunkUrl)},loadLiveryModule:()=>import(window.__srvLiveryUrl||${JSON.stringify(liveryChunkUrl)}),` +
         (names.cameraController ? `camera:this.${names.cameraController}?.camera` : "camera:null") +
         "};" +
         "try{window.__srv.onRaceBoot?.();}catch(e){console.error(e);}"
@@ -411,7 +421,7 @@ export async function patchLiveBundles(origin, log = console) {
   const mainRewritten = rewriteRelativeChunkRefs(origin, "main bundle", mainRawSrc, log);
   const names = deriveIdentifiers(mainRewritten, mainRawSrc);
   log.log("Derived identifiers:", names);
-  const { patchedSrc: mainSrc } = patchMainBundle(mainRewritten, mainRawSrc, names, origin, results, log);
+  const { patchedSrc: mainSrc, liveryChunkUrl } = patchMainBundle(mainRewritten, mainRawSrc, names, origin, results, log);
 
   if (!names.rvChunkPath) throw new Error("Could not locate the RV/TerrainView chunk's import path in the main bundle.");
   const { tvFilename, tvRawSrc } = await fetchTerrainViewChunk(origin, names.rvChunkPath);
@@ -419,5 +429,5 @@ export async function patchLiveBundles(origin, log = console) {
   const tvRewritten = rewriteRelativeChunkRefs(origin, "TerrainView chunk", tvRawSrc, log);
   const { patchedSrc: tvSrc } = patchTerrainViewChunk(tvRewritten, results, log);
 
-  return { mainFilename, mainSrc, tvFilename, tvSrc, names, results };
+  return { mainFilename, mainSrc, tvFilename, tvSrc, liveryChunkUrl, names, results };
 }
