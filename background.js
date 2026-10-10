@@ -66,7 +66,9 @@ function syncRules() {
       const res = await fetch(`${STATE_URL}?_=${Date.now()}`, { cache: "no-store" });
       if (!res.ok) throw new Error(`state.json fetch failed: HTTP ${res.status}`);
       const state = await res.json();
-      if (!state?.mainFilename || !state?.tvFilename) throw new Error("state.json is missing mainFilename/tvFilename");
+      if (!state?.mainFilename) throw new Error("state.json is missing mainFilename");
+      // tvFilename is null when swervle folded the replay class into the main
+      // bundle (nothing separate to redirect) — then only the main rule exists.
 
       // jsDelivr serves these two files with a 7-day browser cache
       // (confirmed: Cache-Control: max-age=604800) — fine for ITS OWN edge
@@ -90,12 +92,16 @@ function syncRules() {
             action: { type: "redirect", redirect: { url: `${CDN_BASE}/patched-bundle.js${cacheBust}` } },
             condition: { urlFilter: mainBundleUrlFilter(state.mainFilename), resourceTypes: ["script"] },
           },
-          {
-            id: TV_RULE_ID,
-            priority: 1,
-            action: { type: "redirect", redirect: { url: `${CDN_BASE}/patched-terrainview.js${cacheBust}` } },
-            condition: { urlFilter: `||swervle.com/assets/${state.tvFilename}`, resourceTypes: ["script"] },
-          },
+          ...(state.tvFilename
+            ? [
+                {
+                  id: TV_RULE_ID,
+                  priority: 1,
+                  action: { type: "redirect", redirect: { url: `${CDN_BASE}/patched-terrainview.js${cacheBust}` } },
+                  condition: { urlFilter: `||swervle.com/assets/${state.tvFilename}`, resourceTypes: ["script"] },
+                },
+              ]
+            : []),
         ],
       });
 

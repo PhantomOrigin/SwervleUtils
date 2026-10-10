@@ -57,6 +57,7 @@ import { dirname, join } from "node:path";
 import {
   rewriteRelativeChunkRefs,
   makePatcher,
+  RV_CLASS_MARKER,
   deriveIdentifiers,
   patchMainBundle,
   patchTerrainViewChunk,
@@ -132,29 +133,43 @@ async function main() {
   const mainRewritten = rewriteRelativeChunkRefs(ORIGIN, "main bundle", mainRawSrc);
   const names = deriveIdentifiers(mainRewritten, mainRawSrc);
   console.log("Derived identifiers:", names);
-  const { patchedSrc: mainSrc, liveryChunkUrl } = patchMainBundle(mainRewritten, mainRawSrc, names, ORIGIN, results);
+  let { patchedSrc: mainSrc, liveryChunkUrl } = patchMainBundle(mainRewritten, mainRawSrc, names, ORIGIN, results);
+
+  // swervle sometimes folds the replay (RV) class into the main bundle
+  // instead of its own chunk. Then there is no TerrainView chunk to
+  // redirect: the raceTelemetry patch goes into the main bundle itself and
+  // state.json carries tvFilename: null (background.js skips that rule).
+  const rvInMain = !names.rvChunkPath && RV_CLASS_MARKER.test(mainSrc);
+  if (rvInMain) {
+    console.log("RV class lives in the main bundle — applying the raceTelemetry patch there.");
+    ({ patchedSrc: mainSrc } = patchTerrainViewChunk(mainSrc, results));
+  }
 
   writeFileSync(join(OUT_DIR, "patched-bundle.js"), mainSrc, "utf8");
   console.log(`Patched main bundle written to patched-bundle.js (${mainSrc.length} bytes).`);
 
-  let tvFilename, tvRawSrc;
-  if (OFFLINE) {
-    tvRawSrc = readFileSync(terrainViewInArg, "utf8");
-    tvFilename = terrainViewInArg.split(/[\\/]/).pop();
-  } else {
-    if (!names.rvChunkPath) throw new Error("Could not locate the RV/TerrainView chunk's import path in the main bundle.");
-    ({ tvFilename, tvRawSrc } = await fetchTerrainViewChunk(ORIGIN, names.rvChunkPath));
-    console.log(`Discovered live RV/TerrainView chunk: ${tvFilename}`);
+  let tvFilename = null;
+  let tvOk = true;
+  if (!rvInMain) {
+    let tvRawSrc;
+    if (OFFLINE) {
+      tvRawSrc = readFileSync(terrainViewInArg, "utf8");
+      tvFilename = terrainViewInArg.split(/[\/]/).pop();
+    } else {
+      if (!names.rvChunkPath) throw new Error("Could not locate the RV/TerrainView chunk's import path in the main bundle.");
+      ({ tvFilename, tvRawSrc } = await fetchTerrainViewChunk(ORIGIN, names.rvChunkPath));
+      console.log(`Discovered live RV/TerrainView chunk: ${tvFilename}`);
+    }
+
+    const tvRewritten = rewriteRelativeChunkRefs(ORIGIN, "TerrainView chunk", tvRawSrc);
+    const { patchedSrc: tvSrc } = patchTerrainViewChunk(tvRewritten, results);
+
+    writeFileSync(join(OUT_DIR, "patched-terrainview.js"), tvSrc, "utf8");
+    console.log(`Patched TerrainView chunk written to patched-terrainview.js (${tvSrc.length} bytes).`);
+    tvOk = await verifyEsmIntegrity("TerrainView chunk", join(OUT_DIR, "patched-terrainview.js"));
   }
 
-  const tvRewritten = rewriteRelativeChunkRefs(ORIGIN, "TerrainView chunk", tvRawSrc);
-  const { patchedSrc: tvSrc } = patchTerrainViewChunk(tvRewritten, results);
-
-  writeFileSync(join(OUT_DIR, "patched-terrainview.js"), tvSrc, "utf8");
-  console.log(`Patched TerrainView chunk written to patched-terrainview.js (${tvSrc.length} bytes).`);
-
   const mainOk = await verifyEsmIntegrity("main bundle", join(OUT_DIR, "patched-bundle.js"));
-  const tvOk = await verifyEsmIntegrity("TerrainView chunk", join(OUT_DIR, "patched-terrainview.js"));
 
   const failed = results.filter((r) => !r.ok);
   console.log(`\n${results.length - failed.length}/${results.length} patches applied.`);

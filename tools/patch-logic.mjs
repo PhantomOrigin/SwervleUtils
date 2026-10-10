@@ -88,7 +88,7 @@ export async function discoverAndFetchMainBundle(origin) {
 }
 
 // The raceTelemetry patch anchors on the replay class's `get finished()`.
-const RV_CLASS_MARKER = /get finished\(\)\{return this\.#s===`finished`\|\|this\.#s===`exhausted`\}/;
+export const RV_CLASS_MARKER = /get finished\(\)\{return this\.#s===`finished`\|\|this\.#s===`exhausted`\}/;
 
 // The chunk the main bundle imports RV from is sometimes just a re-export
 // hub, with the class itself defined in one of ITS imports — so if the
