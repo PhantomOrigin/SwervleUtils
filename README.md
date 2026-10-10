@@ -15,16 +15,24 @@ An unofficial, community-made extension for [swervle.com](https://swervle.com). 
 
 ## Install
 
+### For Users:
+
+Swervle Utils is available on Chrome Webstore and Firefox Add-ons at the following locations:
+Chromium: https://chromewebstore.google.com/detail/swervle-utils-unofficial/kcglfbbiadgcobfdiopaeenmkfddgplh
+Firefox: https://addons.mozilla.org/en-US/firefox/addon/swervle-utils/
+
+### For Developers / Other:
+
 Download the zip for your browser from the latest [release](../../releases/latest) and unzip it.
 
-### Chromium (Chrome / Edge / Brave)
+#### Chromium (Chrome / Edge / Brave)
 
 1. Download and unzip 'SwervleUtilsChromium.zip'
 2. Go to `chrome://extensions`.
 3. Enable **Developer mode** (top right).
 4. Click **Load unpacked** and select the unzipped folder.
 
-### Firefox (Firefox 140 or newer)
+#### Firefox (Firefox 140 or newer)
 
 1. Download 'SwervleUtilsFirefox.zip'
 2. Go to `about:debugging#/runtime/this-firefox`.
