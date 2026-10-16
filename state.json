@@ -1,12 +1,12 @@
 {
-  "mainFilename": "e5c40cc0-DqHO4IXr.js",
+  "mainFilename": "e5c40cc0-MJXfv5Ng.js",
   "tvFilename": null,
-  "liveryChunkUrl": "https://swervle.com/assets/c5c40cc0-BcOCPghv.js",
+  "liveryChunkUrl": "https://swervle.com/assets/c5c40cc0-BENmm_dn.js",
   "patchCount": 12,
   "failedPatches": [
     "main bundle/expose-ready-ingredients",
     "main bundle/watchReplayControlLock_handbrake",
     "main bundle/watchReplayControlLock_throttle"
   ],
-  "patchedAt": "2026-10-15T22:19:37.177Z"
+  "patchedAt": "2026-10-16T00:35:46.771Z"
 }
