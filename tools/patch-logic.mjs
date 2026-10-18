@@ -138,7 +138,7 @@ export function deriveIdentifiers(mainSrc, mainRawSrc) {
   }
   {
     const m = mainSrc.match(
-      /=([A-Za-z0-9_$]+)\(\{displayName:i\.opponent\.displayName,relationship:`friend`,surface:`gameplay`\}\),[A-Za-z0-9_$]+=new ([A-Za-z0-9_$]+)\(\{carView:/
+      /=([A-Za-z0-9_$]+)\(\{displayName:([A-Za-z0-9_$]+)\.opponent\.displayName,relationship:`friend`,surface:`gameplay`\}\),[A-Za-z0-9_$]+=new ([A-Za-z0-9_$]+)\(\{carView:/
     );
     names.buildNameplate = m?.[1] ?? null;
     names.GL = m?.[2] ?? null;
