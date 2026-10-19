@@ -138,7 +138,7 @@ export function deriveIdentifiers(mainSrc, mainRawSrc) {
   }
   {
     const m = mainSrc.match(
-      /=([A-Za-z0-9_$]+)\(\{displayName:i\.opponent\.displayName,relationship:`friend`,surface:`gameplay`\}\),[A-Za-z0-9_$]+=new ([A-Za-z0-9_$]+)\(\{carView:/
+      /=([A-Za-z0-9_$]+)\(\{displayName:[A-Za-z0-9_$]+\.opponent\.displayName,relationship:`friend`,surface:`gameplay`\}\),[A-Za-z0-9_$]+=new ([A-Za-z0-9_$]+)\(\{carView:/
     );
     names.buildNameplate = m?.[1] ?? null;
     names.GL = m?.[2] ?? null;
@@ -217,7 +217,7 @@ export function patchMainBundle(mainSrc, mainRawSrc, names, origin, results, log
   ) {
     mainPatcher.insertAfter(
       "expose-ready-ingredients",
-      /this\.#[A-Za-z0-9_$]+\.rivalGap=new [A-Za-z0-9_$]+\(i\.track\.routeLine\)\}catch\(n\)\{throw t\?\.dispose\(\),e\.dispose\(\),n\}\}/,
+      /this\.#[A-Za-z0-9_$]+\.rivalGap=new [A-Za-z0-9_$]+\([A-Za-z0-9_$]+\.track\.routeLine\)\}catch\([A-Za-z0-9_$]+\)\{throw [A-Za-z0-9_$]+\?\.dispose\(\),[A-Za-z0-9_$]+\.dispose\(\),[A-Za-z0-9_$]+\}\}/,
       () =>
         "window.__srv=window.__srv||{};" +
         `window.__srv.ready={RV:${names.RV},GL:${names.GL},VD:${names.VD},appearance:${names.ghostAppearance},` +
