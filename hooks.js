@@ -25,32 +25,14 @@
   // Pause suppression. The game pauses when the window blurs or pointer
   // lock is lost; our own DOM writes can trigger either mid-race. While
   // window.__srvSuppressPause is set (srv-main.js manages it), those two
-  // listeners are skipped.
+  // events are stopped before the game's listeners see them. These listeners
+  // are registered at document_start, before the game's, so they run first.
   const origAdd = EventTarget.prototype.addEventListener;
-  const origRemove = EventTarget.prototype.removeEventListener;
-  const guarded = new WeakMap();
-  const isGuarded = (target, type) =>
-    (type === "blur" && target === window) || (type === "pointerlockchange" && target === document);
-  EventTarget.prototype.addEventListener = function (type, listener, options) {
-    if (typeof listener === "function" && isGuarded(this, type)) {
-      let wrapper = guarded.get(listener);
-      if (!wrapper) {
-        wrapper = function (e) {
-          if (window.__srvSuppressPause) return undefined;
-          return listener.call(this, e);
-        };
-        guarded.set(listener, wrapper);
-      }
-      return origAdd.call(this, type, wrapper, options);
-    }
-    return origAdd.call(this, type, listener, options);
+  const stopIfSuppressed = (e) => {
+    if (window.__srvSuppressPause) e.stopImmediatePropagation();
   };
-  EventTarget.prototype.removeEventListener = function (type, listener, options) {
-    if (typeof listener === "function" && isGuarded(this, type) && guarded.has(listener)) {
-      return origRemove.call(this, type, guarded.get(listener), options);
-    }
-    return origRemove.call(this, type, listener, options);
-  };
+  origAdd.call(window, "blur", stopIfSuppressed, true);
+  origAdd.call(document, "pointerlockchange", stopIfSuppressed, true);
 
   // "Don't grab cursor" setting, and no cursor grab while watching a replay.
   const origRequestPointerLock = Element.prototype.requestPointerLock;
@@ -209,7 +191,7 @@
     n.generateTrack = m?.[1] ?? null;
     m = text.match(/=([\w$]+)\([\w$]+\.dailyId,[\w$]+\.track\.revision\.rulesetVersion,\{previewUnreleasedRules:/);
     n.modifiersFor = m?.[1] ?? null;
-    m = text.match(/([\w$]+)\(`\/`\)\.filter\(\(\{contentId:[\w$]+\}\)=>[\w$]+===[\w$]+\);this\.#[\w$]+=new [\w$]+\(\{manifest:/);
+    m = text.match(/([\w$]+)\(`\/`\)\.filter\(\(\{contentId:[\w$]+\}\)=>[\w$]+===[\w$]+\)/);
     n.assetManifest = m?.[1] ?? null;
     m = text.match(/createGhostRaceLivery\([\w$]+,[\w$]+\)\{[\s\S]{0,400}?import\(`(\.\/[^`]+)`\)/);
     n.liveryChunk = m?.[1] ?? null;
