@@ -54,7 +54,7 @@ This creates `versions/SwervleUtilsChromium.zip` and `versions/SwervleUtilsFiref
 
 ## How it works
 
-### Leaderboard box (no patching needed — this part is fully standard API usage)
+### Leaderboard box
 
 - Reads the site's own `data-run-id` on leaderboard rows and calls `GET /api/v1/daily` → `GET /api/v1/dailies/{dailyId}/leaderboard` → `GET /api/v1/account/runs` to build the top-7 + PB-context view.
 - `GET /api/v1/runs/{publicRunId}/ghost` returns a run's recorded inputs as base64 (`car-state-byte-v1`): one byte per tick, bitmask `throttle=1, reverse=2, steerLeft=4, steerRight=8, handbrake=16, recovery=32, boost=64`.
@@ -62,31 +62,27 @@ This creates `versions/SwervleUtilsChromium.zip` and `versions/SwervleUtilsFiref
 
 ### How the live hooks work
 
-`tools/patch-bundle.mjs` makes six small, precisely-anchored insertions into a copy of the site's bundle (kept as `patched-bundle.js` in this folder):
+The extension doesn't modify or replace any of swervle.com's code, and runs nothing that isn't in this package.
 
-1. Exposes `window.__srv.ready = {RV, GL, VD, track, viewParent, assetFactory, modifiers, camera, ...}` — the exact classes/objects the site's own code uses to build its native opponent-ghost — every time a race boots, then calls `window.__srv.onRaceBoot?.()` so the extension can clear out any ghosts left over from a previous race context.
-2. Exposes `window.__srv.onTick(telemetry)`, called every physics tick with your live `{tick, nextGateIndex, gateCount, speed, position, phase}` — this is what drives the split tracker, what gates ghost movement to the real race clock, and (via a backwards tick jump) how a Retry is detected to restart every live ghost.
-3. Exposes `window.__srv.onRender({alpha, playerPosition, camera})`, called every rendered frame, right after the game updates its own ghosts/camera — used to update any ghost we've spawned (including its nameplate — see below) and (optionally) chase-cam the camera onto it.
-4. Adds a `raceTelemetry` getter to their `RV` (replay/physics) class, so a ghost can be silently fast-forwarded through the *real* physics (via repeated `.step()` calls, not real-time) to read out its exact checkpoint-crossing ticks/speeds — used to compute real PB splits.
-5. Makes the player's own car's color dynamic. The player's car is spawned through a factory (inside `uh`, literally named `playable-presentation-root` in the site's own code — confirmed to be the real driveable car, not a menu decoration) that's registered *once*, at app boot, with a fixed `materialColorOverrides` object (`QL`). This patches one level deeper than that registration — inside `VD`'s constructor, at the exact line (`JD(...)`) that applies the override to the car's materials — so it re-evaluates `window.__srvCarColor` on every car instantiation rather than baking in whatever it was at registration time. It only swaps in the color when the override passed in is `QL` by reference, which is what makes this target *specifically* the player's own car and leave every ghost (which always passes its own distinct override object) untouched. **Confirmed by testing**: the player's own car object persists across race retries *and* across starting new races within the same page session — a color change only actually takes effect after an honest page reload, not just a restart. A genuinely live recolor (mutating the current car's material directly, bypassing the factory entirely) was also tried and didn't work reliably, so it was dropped.
+swervle.com's entry script is an ES module. [`hooks.js`](hooks.js) (page world, `document_start`) imports that same URL again, which returns the already-running module instance, and finds the game's own classes among its exports by their method names (scene manager, car view, replay simulator, renderer). It wraps a few of their prototype methods to watch the game:
 
-**Ghosting / duplicate-looking cars, and the black shape on the horizon**: `GL.update(alpha, referencePoint)` toggles the car between a solid material and a semi-transparent, depth-write-disabled "far" material depending on distance to whatever reference point is passed — a deliberate fade for *distant* native ghosts. We were passing the *player's* position as that reference, so any of our ghosts running at a different pace (usually far from the player) spent most of its time in that transparent state — overlapping, unsorted transparent geometry from a car model reads exactly as "ghosting, multiple copies visible at once," and the same material at a bad angle/distance is a plausible source of the dark horizon blob too. First fix: pass each ghost's own (raw, non-interpolated) position as the reference instead — usually enough, but a fast-moving car could still occasionally drift past the distance threshold before the next tick updated it, so the effect was reduced but not eliminated. Second fix: compute the *exact same* alpha-interpolated position `GL` uses internally (a plain lerp between the chassis's `previousPosition`/`position`, matching what it derives from the snapshot we just handed it) and pass that — distance to itself is then always precisely 0, not just usually close to 0, so it can never cross the threshold.
+1. **Race boot** (the scene manager's `initialize`): builds `window.__srv.ready` — the replay simulator, car view class, car definition, scene, materials and track — and calls `window.__srv.onRaceBoot()`.
+2. **Every physics tick** (`consumeSnapshot`/`consumeEvents`): reads your car's snapshot and the race events (countdown, go, checkpoint, finish) and calls `window.__srv.onTick({tick, nextGateIndex, gateCount, speed, position, phase, displayTimeMs, gear, shiftTimer})`.
+3. **Every rendered frame** (the renderer's `render`): calls `window.__srv.onRender({alpha, camera})`.
 
-**Nameplates not billboarding**: were angled toward another car instead of facing the camera. `updateNameplate` copies `camera.quaternion`/`camera.position` onto the nameplate directly; if the site's camera is parented under a rig (e.g. attached to the player's car) those are *local*-space, not the camera's actual world orientation. Fixed by computing the camera's true world quaternion/position (`camera.getWorldQuaternion()`/`getWorldPosition()`, into cloned scratch objects so the real camera is never mutated) and passing that instead.
+Some values aren't exported (the car definition, the track generator, the daily physics modifiers, the livery module). `hooks.js` reads the entry script's text to see which of swervle's own chunk files they're imported from, and imports those chunks the same way. The track is regenerated from the day's seed with the game's own generator and checked against the manifest's track digest.
 
-**Ghost colors landing on nearly the same hue**: the old hash (`h = h*31 + charCode`) barely scrambles inputs that share a long common prefix, and same-day run ids are usually near-sequential, differing only in their last couple of characters. Replaced with FNV-1a + a bit-mixing finalizer (real avalanche — small input changes flip most output bits) followed by a golden-ratio multiplicative spread over the hue circle.
+A few things are done at the page level instead: pause suppression (skips the game's blur/pointer-lock-loss listeners while the extension writes to the page), "don't grab cursor" (makes `requestPointerLock` a no-op), the restart fix (re-sends held driving keys after a restart), the C-key camera cycle (uses the game's own reverse-view button and C handling), and keeping your car still while watching a replay.
 
-**The game visibly pausing right when the leaderboard loads**: `computeSplits` (hook #4) fast-forwards a PB through the real physics in a tight synchronous loop — for a run of any real length that's thousands of `.step()` calls back-to-back with no yield, which blocks the main thread long enough to stall the game's own render loop. It now yields (`await setTimeout(0)`) every 100 ticks, spreading the same work across many frames instead of stalling one of them.
+[`srv-main.js`](srv-main.js) turns those hooks into a small API — spawn/despawn a ghost (keyed by `publicRunId`), follow one with the camera, compute splits — that the isolated-world UI code talks to over `CustomEvent`s via [`bridge.js`](bridge.js).
 
-`background.js` registers a *dynamic* `declarativeNetRequest` rule pointing at this repo's own hosted `patched-bundle.js`/`patched-terrainview.js` (see the setup section above) — dynamic because the exact live filenames it needs to match change with every swervle redeploy, kept in sync via `state.json`. A separate content script, [`srv-main.js`](srv-main.js), runs in the page's own JS world at `document_start` (before that script executes) and turns those hooks into a small API — spawn/despawn a ghost (keyed and de-duplicated by `publicRunId`, so concurrent/repeated requests for the same run reuse the same car instead of stacking a new one each time), follow one with the camera, compute splits — that the extension's normal (isolated-world) UI code talks to over `CustomEvent`s via [`bridge.js`](bridge.js), since isolated and MAIN worlds don't share JS state.
+Ghosts only advance while your own race is `racing`. Watching a replay **can't be counted as your run**: it only calls the read-only ghost endpoint and adds a separate car to the scene; it never touches race state or calls a submit endpoint.
 
-Ghosts only advance while your own race's `phase` is `racing` (hook #2) — spawning one during the pre-race countdown/pointer-lock-grab leaves it standing still at the start line until your own run actually begins, instead of it having been ticking in the background the whole time.
-
-Watching a replay this way **still can't be counted as your run**: it only ever calls the read-only ghost endpoint and adds a new, separate car object to the scene (the same mechanism the site uses for its own opponent/PB ghosts) — it never touches race state, never calls a start/submit endpoint, and your own car never moves.
+If swervle.com changes the names these hooks look for, the affected features turn off (with a console warning) and the rest of the extension keeps working.
 
 ### Split tracker
 
-Uses hook #4 above to fast-forward your PB through the real physics once (fast, not real-time) and record its exact tick/speed at each checkpoint ("gate" — the site's own internal term, found in its track data). Then compares that, live, against your `onTick` telemetry as you race: the right-side panel appends a row (your time, delta, speed delta) for every checkpoint reached, never trimmed, and a popup docked under the real timer flashes the same delta/speed-diff for ~2.6s right as you cross it.
+Fast-forwards your PB through the game's own replay simulator once (fast, not real-time) and record its exact tick/speed at each checkpoint ("gate" — the site's own internal term, found in its track data). Then compares that, live, against your `onTick` telemetry as you race: the right-side panel appends a row (your time, delta, speed delta) for every checkpoint reached, never trimmed, and a popup docked under the real timer flashes the same delta/speed-diff for ~2.6s right as you cross it.
 
 ### Fallback standalone viewer
 
@@ -109,31 +105,16 @@ Separately, the moment the site's own post-race result screen appears, if your r
 - `splits.js` — `POPUP_VISIBLE_MS` (2600) controls how long the checkpoint popup stays visible before fading.
 - The kinematic constants in `decoder.js`'s `simulatePath` only affect the *fallback* viewer's visual path shape, not accuracy of anything else.
 
-## Regenerating the patch after a site update
-
-You shouldn't need to — [`.github/workflows/repatch.yml`](.github/workflows/repatch.yml) does this automatically every 15 minutes (see the setup section above). To run it locally anyway (debugging, or before the GitHub repo exists):
-
-```bash
-node tools/patch-bundle.mjs
-# or, against a saved bundle instead of fetching live:
-node tools/patch-bundle.mjs <path-to-downloaded-main.js> <path-to-downloaded-terrainview-chunk.js>
-```
-
-Writes `patched-bundle.js`/`patched-terrainview.js`/`state.json` and runs the full ESM-integrity check. If it throws (or logs) an anchor-count error, the site's internals changed *shape* (not just renamed identifiers) and the anchor regexes in `tools/patch-logic.mjs` (each documented inline) need to be re-derived from the new bundle — the GitHub Actions workflow hits the exact same failure and its exit code stops it from publishing a broken patch; check its run log under the repo's **Actions** tab.
-
 ## Files
 
-- `manifest.json` — MV3 manifest: leaderboard/UI content scripts, MAIN-world hook script, background service worker, host permissions (including `raw.githubusercontent.com`, for fetching `state.json` and the patched files it points at).
-- `background.js` — lightweight sync worker: fetches `state.json` from GitHub, keeps the `declarativeNetRequest` rule's match conditions pointed at the current live swervle.com filenames. Builds no content itself — see its own top comment for why.
-- `.github/workflows/repatch.yml` — the actual self-healing: runs `tools/patch-bundle.mjs` against live swervle.com every 15 minutes and commits the result when it changes.
-- `tools/patch-logic.mjs` — the portable derive/patch core (identifier derivation, anchor patches, no Node-specific APIs) — imported by `tools/patch-bundle.mjs`, which both the GitHub Actions workflow and a local dev run use, so there's exactly one copy of this logic.
-- `tools/patch-bundle.mjs` — CLI entry point: fetches live (or reads local files in offline mode), patches via `patch-logic.mjs`, writes `patched-bundle.js`/`patched-terrainview.js`/`state.json`, runs the ESM-integrity check.
-- `patched-bundle.js` / `patched-terrainview.js` / `state.json` — the actual published artifacts the extension redirects to / reads, kept updated by the GitHub Actions workflow above (or by a manual local run).
-- `srv-main.js` — MAIN-world script: turns the patch's hooks into a ghost spawn/despawn/camera/splits API.
+- `manifest.json` — MV3 manifest: page-world hook scripts, UI content scripts, background worker.
+- `hooks.js` — page-world runtime hooks into the game's own modules (see above).
+- `srv-main.js` — page-world ghost spawn/despawn/camera/splits API built on those hooks.
 - `bridge.js` — CustomEvent request/response bridge between the isolated content script and `srv-main.js`.
+- `background.js` — "new version available" check against GitHub releases.
 - `decoder.js` — base64/bitmask decode + fallback kinematic path reconstruction.
 - `api.js` — read-only fetch wrapper (daily manifest, leaderboard, account runs, ghost).
 - `viewer.js` — fallback standalone replay overlay (canvas + HUD + transport controls).
 - `splits.js` — live split/checkpoint tracker panel.
-- `content.js` — leaderboard box, button injection, watch/race orchestration, active-ghost status bar, Swervle Utils settings menu + HUD editor, reports live page state to `background.js`.
+- `content.js` — leaderboard box, buttons, watch/race orchestration, Swervle Utils settings menu + HUD editor.
 - `styles.css` — all injected UI styling.

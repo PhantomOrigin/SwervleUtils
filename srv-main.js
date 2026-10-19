@@ -1,9 +1,8 @@
 // Runs in the PAGE's own JS world (not the extension's isolated world), at
-// document_start — i.e. before swervle's own module script executes. This
-// is what makes window.__srv.ready (installed by the patched bundle, see
-// tools/patch-bundle.mjs) usable: classes/objects the patch attaches to
-// `window` are plain global references, reachable from any script sharing
-// that global, regardless of which script originally defined them.
+// document_start. hooks.js (loaded just before this) watches the game
+// through its own classes and provides window.__srv.ready plus the
+// onRaceBoot/onTick/onRender callbacks this file defines; swervle.com's code
+// itself is never modified.
 //
 // content.js (an isolated-world content script) can't see any of this
 // directly — isolated and MAIN worlds don't share JS state, only the DOM.
@@ -11,11 +10,8 @@
 (function () {
   window.__srv = window.__srv || {};
 
-  // Extension settings toggles (see patch #7/#10 in tools/patch-bundle.mjs
-  // and content.js's Swervle Utils menu, DRIVING_SETTINGS). Must be read BEFORE the
-  // patched bundle's own module script runs, which this file is guaranteed
-  // to do — it's a "world":"MAIN" content script at "run_at":"document_start",
-  // so it always executes ahead of the page's own <script type=module>.
+  // Extension settings toggles (content.js's Swervle Utils menu,
+  // DRIVING_SETTINGS), read by hooks.js. Applied on page load.
   try {
     window.__srvNoPointerLock = localStorage.getItem("srv-no-pointer-lock") === "true";
     window.__srvEnableReverseCam = localStorage.getItem("srv-enable-reverse-cam") === "true";
@@ -30,26 +26,19 @@
   // captured while watching rather than driving, so this isn't gated
   // behind an opt-in the way __srvNoPointerLock is.
   window.__srvWatchingReplay = false;
-  // Combined flag the anti-cheat control-lock patch (#12) actually reads —
-  // true only once the player's own race has genuinely reached "racing"
-  // (not "ready"/"countdown"/anything else) while a replay is also being
-  // watched. Computed here, in JS we control, rather than making the
-  // patched bundle re-derive "is it racing right now" itself from whatever
-  // local variable happens to hold that at the anchor point — that would
-  // mean depending on a specific minified variable name never changing
-  // across redeploys, which is exactly the kind of thing this whole
-  // project has repeatedly had to re-derive by hand. Recomputed wherever
-  // either input (playerPhase, __srvWatchingReplay) can change.
+  // True only while a replay is being watched AND the player's own race is
+  // running; hooks.js then keeps the player's car still (handbrake held,
+  // throttle ignored).
   window.__srvWatchingReplayActive = false;
   function updateWatchingReplayActive() {
     window.__srvWatchingReplayActive = window.__srvWatchingReplay === true && playerPhase === "racing";
   }
 
-  // Pause-suppression flag (see patch #8 in tools/patch-bundle.mjs) —
+  // Pause-suppression flag (read by hooks.js) —
   // content.js/splits.js can't set window.__srvSuppressPause directly,
   // since isolated and MAIN worlds don't share a `window`, so they dispatch
   // this event instead and this file (which DOES share the real page
-  // window) sets the actual flag the patched bundle checks. Reference-
+  // window) sets the actual flag hooks.js checks. Reference-
   // counted, not a flat boolean: the leaderboard and the splits panel each
   // wrap their own DOM writes in this independently, and their suppress
   // windows can overlap (both mutating DOM within the same couple of
@@ -62,26 +51,6 @@
     suppressPauseCount = Math.max(0, suppressPauseCount + (e.detail?.suppress ? 1 : -1));
     window.__srvSuppressPause = suppressPauseCount > 0;
   });
-
-  // Kept current by content.js (see bridge.js's setLiveryUrl) across
-  // swervle.com redeploys — see wearLivery/loadLiveryModule below for why
-  // this can't just be a value baked into the patched bundle once at patch
-  // time. Left undefined until the first push arrives, so loadLiveryModule
-  // falls back to its own patch-time literal until then.
-  document.addEventListener("srv:setLiveryUrl", (e) => {
-    if (e.detail?.url) window.__srvLiveryUrl = e.detail.url;
-  });
-
-  // Staleness detection/self-healing used to live here (compare the page's
-  // actual <script type=module> src against a filename baked in at the last
-  // manual `tools/patch-bundle.mjs` run, and warn content.js if they'd
-  // drifted). Replaced entirely by the self-patching background service
-  // worker (background.js) — it re-derives and re-registers the patch
-  // itself at runtime instead of running stale until a human re-ran a
-  // script, so there's no longer a fixed filename here to compare against.
-  // content.js now reports the live filename straight to background.js
-  // (which has the actual current state), since this MAIN-world script has
-  // no chrome.runtime access to do that itself.
 
   // Ghosts are keyed by `key` (the run's publicRunId), not an opaque id —
   // this is what makes spawning idempotent: asking to spawn a key that's
@@ -119,7 +88,7 @@
 
   // A genuinely new race (new day, new track, or the daily's own "run again"
   // flow — not a simple in-place retry) reassigns window.__srv.ready to a
-  // fresh scene context (patch #1 calls this right after). Ghosts spawned
+  // fresh scene context (hooks.js calls this right after). Ghosts spawned
   // against the *old* context have no business surviving into a new one, so
   // clear them out rather than risk them referencing stale/disposed scene
   // objects (which is one plausible source of "duplicate car" rendering
@@ -142,7 +111,7 @@
   // build, and grabbing one just for this would mean depending on yet
   // another chunk's internal export layout. Camera.matrixWorldInverse/
   // projectionMatrix are plain properties already present on the real
-  // camera object the patch hands us, so the actual math needs nothing
+  // camera object hooks.js hands us, so the actual math needs nothing
   // beyond that.
   //
   // Only the marker for the CURRENT next gate (nextGateIndex, tracked from
@@ -239,7 +208,7 @@
     }
   }
 
-  // ---- per-tick / per-render hooks called by the patched bundle ----
+  // ---- per-tick / per-render hooks called by hooks.js ----
 
   // Ghosts only advance once the *real* race is actually racing (phase
   // `racing`, i.e. countdown/pointer-lock-grab is over) — one real physics
@@ -620,7 +589,7 @@
     console.log(`[Swervle Replay Viewer] spawnGhostOnce ENTER key=${key} ghosts.has=${ghosts.has(key)} pendingSpawns.has=${pendingSpawns.has(key)}`);
 
     const ready = window.__srv.ready;
-    if (!ready) throw new Error("Live hooks unavailable (patched bundle didn't initialize this race yet)");
+    if (!ready) throw new Error("Live hooks unavailable (the race isn't ready yet)");
 
     const rv = new ready.RV({ modifiers: ready.modifiers, states, track: ready.track });
     const initial = rv.create();
@@ -711,7 +680,7 @@
   // Silently fast-forwards a replay through the real physics (as fast as JS
   // can loop, not real time) purely to read out its exact checkpoint/"gate"
   // crossing ticks + speeds — used to get real PB splits, not an
-  // approximation. Uses the `raceTelemetry` getter the patch adds to RV.
+  // approximation. Reads the race events the simulator reports each step.
   //
   // Runs in small chunks with a yield between them instead of one long
   // synchronous loop — a run can be thousands of ticks, and stepping
@@ -735,27 +704,33 @@
   async function computeSplits(states) {
     const ready = window.__srv.ready;
     if (!ready) throw new Error("Live hooks unavailable");
-    const rv = new ready.RV({ modifiers: ready.modifiers, states, track: ready.track });
+    // capturePresentationData makes each frame carry the race events the
+    // simulation produced that tick (checkpoints, finish with its exact time).
+    // frame.tick counts from the race start, like the live timer.
+    const rv = new ready.RV({ modifiers: ready.modifiers, states, track: ready.track, capturePresentationData: true });
     rv.create();
     await nextFrame(); // rv.create() itself can be non-trivial work — paint before stepping starts
     const gates = [];
-    let lastGateIndex = 0;
+    let totalTicks = null;
     const maxSteps = states.length + 600; // states.length ticks + settle tail
     const CHUNK_SIZE = 12;
     for (let i = 0; i < maxSteps && !rv.finished; i++) {
       rv.step();
-      const tel = rv.raceTelemetry;
-      if (tel && tel.nextGateIndex > lastGateIndex) {
-        for (let g = lastGateIndex; g < tel.nextGateIndex; g++) {
-          gates.push({ gateIndex: g, tick: tel.tick, speed: tel.speed, timeMs: Number.isFinite(tel.displayTimeMs) ? tel.displayTimeMs : null });
-        }
-        lastGateIndex = tel.nextGateIndex;
+      const frame = rv.frame;
+      for (const ev of frame.events ?? []) {
+        if (ev.type !== "race-checkpoint" && ev.type !== "race-finish") continue;
+        const gateIndex = ev.payload?.gateIndex;
+        if (!Number.isSafeInteger(gateIndex) || gates.some((g) => g.gateIndex === gateIndex)) continue;
+        const timeMs = ev.type === "race-finish" && Number.isFinite(ev.payload?.displayTimeMs) ? ev.payload.displayTimeMs : null;
+        gates.push({ gateIndex, tick: frame.tick, speed: frame.car?.speed ?? 0, timeMs });
+        if (ev.type === "race-finish") totalTicks = frame.tick;
       }
       if (i % CHUNK_SIZE === CHUNK_SIZE - 1) {
         await nextFrame();
       }
     }
-    const totalTicks = rv.replayTick;
+    gates.sort((x, y) => x.gateIndex - y.gateIndex);
+    if (totalTicks === null) totalTicks = rv.replayTick;
     rv.dispose?.();
     return { gates, totalTicks };
   }

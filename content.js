@@ -2096,13 +2096,6 @@
       chrome.runtime.sendMessage({ type: "srv:pageLoaded", liveMainFilename }, (response) => {
         if (chrome.runtime.lastError || !response) return;
 
-        // Pushed on every page load, not just when something changed —
-        // cheap (one CustomEvent), and srv-main.js only acts on it when a
-        // real URL comes through. Keeps window.__srvLiveryUrl (see
-        // srv-main.js) from ever drifting too far behind swervle.com's
-        // actual current livery chunk.
-        if (response.liveryChunkUrl) window.SwervleBridge.setLiveryUrl(response.liveryChunkUrl);
-
         if (response.staleOnLoad) {
           // Persistent, not the usual auto-dismissing toast: this can break
           // almost anything unpredictably (past examples: ghosts, splits,
