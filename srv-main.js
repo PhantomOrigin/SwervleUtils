@@ -329,9 +329,20 @@
     }
   }
 
+  // The camera's view matrix is normally refreshed by the renderer AFTER this
+  // runs, so anything projected from the camera's pose here (checkpoint
+  // numbers, nameplates) would use last frame's matrix — visibly trailing
+  // behind whenever the camera moves, which is constant while a chase-cam
+  // follows a replay. Recompute it from the camera's current pose first.
+  function refreshCameraMatrices(camera) {
+    try {
+      camera.updateMatrixWorld(true);
+      camera.matrixWorldInverse.copy(camera.matrixWorld).invert();
+    } catch {}
+  }
+
   window.__srv.onRender = ({ alpha, camera }) => {
     stepManualGhosts(performance.now());
-    updateGateMarkers(camera);
 
     // Chase-cam repositioning must happen BEFORE the nameplate billboarding
     // below, not after — updateNameplate() bakes in whatever camera
@@ -349,6 +360,11 @@
           console.error("[Swervle Replay Viewer] camera follow failed", err);
         }
       }
+    }
+
+    if (camera) {
+      refreshCameraMatrices(camera);
+      updateGateMarkers(camera);
     }
 
     for (const g of ghosts.values()) {
