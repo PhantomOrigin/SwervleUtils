@@ -255,6 +255,21 @@
         this.disposed = false;
         this.isVisible = true;
         this.nameplate = nameplate && NameplateClass ? new NameplateClass(nameplate) : null;
+        // The game's own nameplate class isn't always reachable (it isn't
+        // always exported), so fall back to a plain HTML label pinned over the car.
+        this.label = null;
+        if (nameplate && !this.nameplate) {
+          const el = document.createElement("div");
+          el.textContent = String(nameplate.label ?? nameplate);
+          Object.assign(el.style, {
+            position: "fixed", left: "0", top: "0", transform: "translate(-50%, -100%)",
+            padding: "1px 8px", borderRadius: "999px", background: "rgba(12,14,20,0.72)",
+            color: "#fff", font: "700 12px sans-serif", whiteSpace: "nowrap",
+            pointerEvents: "none", zIndex: "999995", display: "none",
+          });
+          document.body.appendChild(el);
+          this.label = el;
+        }
         try {
           carView.consumeSnapshot(initialSnapshot);
           carView.update(1);
@@ -302,13 +317,39 @@
         }
       }
       updateNameplate(camera) {
-        if (this.disposed || !this.nameplate) return;
-        this.nameplate.update(camera.quaternion, camera.position, this.position);
+        if (this.disposed) return;
+        if (this.nameplate) {
+          this.nameplate.update(camera.quaternion, camera.position, this.position);
+          return;
+        }
+        if (!this.label) return;
+        const ve = camera.matrixWorldInverse?.elements;
+        const pe = camera.projectionMatrix?.elements;
+        if (!ve || !pe || !this.isVisible) {
+          this.label.style.display = "none";
+          return;
+        }
+        const { x, y, z } = this.position;
+        const wy = y + 1.6;
+        const vx = ve[0] * x + ve[4] * wy + ve[8] * z + ve[12];
+        const vy = ve[1] * x + ve[5] * wy + ve[9] * z + ve[13];
+        const vz = ve[2] * x + ve[6] * wy + ve[10] * z + ve[14];
+        const cx = pe[0] * vx + pe[4] * vy + pe[8] * vz + pe[12];
+        const cy = pe[1] * vx + pe[5] * vy + pe[9] * vz + pe[13];
+        const cw = pe[3] * vx + pe[7] * vy + pe[11] * vz + pe[15];
+        if (cw <= 0.0001) {
+          this.label.style.display = "none";
+          return;
+        }
+        this.label.style.display = "block";
+        this.label.style.left = `${(cx / cw * 0.5 + 0.5) * window.innerWidth}px`;
+        this.label.style.top = `${(1 - (cy / cw * 0.5 + 0.5)) * window.innerHeight}px`;
       }
       dispose() {
         if (this.disposed) return;
         this.disposed = true;
         this.nameplate?.dispose();
+        this.label?.remove();
         this.restoreMaterials();
         this.carView.dispose();
       }
@@ -567,7 +608,7 @@
         (n) => resolve(n).catch(() => undefined)
       )
     );
-    const missing = Object.entries({ RV, VD, definition, generateTrack })
+    const missing = Object.entries({ RV, VD, definition })
       .filter(([, v]) => !v)
       .map(([k]) => k);
     if (missing.length) console.warn(TAG, "some game parts weren't found, ghosts/splits are off:", missing.join(", "));
@@ -623,14 +664,20 @@
           const manifest = await res.json();
           const rev = manifest?.track?.revision;
           if (!rev) throw new Error("race manifest has no track revision");
-          const generated = pieces.generateTrack({ generatorVersion: rev.generatorVersion, seed: rev.seed });
-          if (generated?.revision?.trackDigest !== rev.trackDigest) throw new Error("generated track doesn't match the race");
-          // The generator stamps its own default ruleset; the race's ruleset
-          // comes from the manifest (the replay simulator needs it to match).
-          const track = Object.freeze({
-            ...generated,
-            revision: Object.freeze({ ...generated.revision, rulesetVersion: rev.rulesetVersion }),
-          });
+          // The race manifest carries the full track the game itself uses
+          // (newer map formats can't be regenerated from a seed at all), so
+          // use it directly. Fall back to regenerating from the seed only if
+          // the served track lacks what the replay simulator needs.
+          let track = manifest.track;
+          if (!Array.isArray(track.gates) || !Array.isArray(track.routeLine)) {
+            if (!pieces.generateTrack) throw new Error("race manifest has no usable track");
+            const generated = pieces.generateTrack({ generatorVersion: rev.generatorVersion, seed: rev.seed });
+            if (generated?.revision?.trackDigest !== rev.trackDigest) throw new Error("generated track doesn't match the race");
+            track = Object.freeze({
+              ...generated,
+              revision: Object.freeze({ ...generated.revision, rulesetVersion: rev.rulesetVersion }),
+            });
+          }
           const modifiers = pieces.modifiersFor
             ? pieces.modifiersFor(manifest.dailyId, rev.rulesetVersion, { previewUnreleasedRules: false })
             : undefined;
@@ -646,7 +693,7 @@
   async function onRaceBoot(scene) {
     const seq = ++bootSeq;
     srv.ready = null;
-    if (!pieces || !pieces.RV || !pieces.VD || !pieces.definition || !pieces.generateTrack) return;
+    if (!pieces || !pieces.RV || !pieces.VD || !pieces.definition) return;
     let loaded;
     try {
       loaded = await loadTrack();
