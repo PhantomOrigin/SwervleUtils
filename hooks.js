@@ -199,13 +199,76 @@
   }
 
   // Finds an exported class by the names of its prototype members.
-  function findClass(mod, members) {
-    for (const v of Object.values(mod)) {
-      if (typeof v !== "function" || !v.prototype) continue;
-      const names = new Set(Object.getOwnPropertyNames(v.prototype));
-      if (members.every((x) => names.has(x))) return v;
+  function findClass(mods, members) {
+    for (const mod of [].concat(mods)) {
+      for (const v of Object.values(mod)) {
+        if (typeof v !== "function" || !v.prototype) continue;
+        const names = new Set(Object.getOwnPropertyNames(v.prototype));
+        if (members.every((x) => names.has(x))) return v;
+      }
     }
     return null;
+  }
+
+  // swervle.com's entry script is sometimes a tiny stub that just imports the
+  // real app from another chunk, and the game's classes can be spread over
+  // several chunks. Imports the entry module and the modules it (and its
+  // direct imports) statically import — all already loaded by the page, so
+  // these imports return the running instances — and returns them with the
+  // text of the modules whose imports/exports we need to read.
+  async function loadGameModules(entryUrl) {
+    const SCENE = ["consumeSnapshot", "consumeEvents", "viewParent", "materialRegistrar"];
+    const modules = []; // [{ url, ns }]
+    const texts = new Map(); // url -> source text
+    const seen = new Set();
+    const importUrl = async (u) => {
+      if (seen.has(u)) return null;
+      seen.add(u);
+      try {
+        const ns = await import(u);
+        modules.push({ url: u, ns });
+        return ns;
+      } catch (err) {
+        console.warn(TAG, "couldn't import", u, err);
+        return null;
+      }
+    };
+    const specsOf = (text, base) =>
+      // Static imports only (lazy chunks are left alone: importing one would load it).
+      [...new Set([...text.matchAll(/from\s*"(\.\/[^"]+)"/g)].map((m) => new URL(m[1], base).href))];
+
+    await importUrl(entryUrl);
+    let frontier = [entryUrl];
+    // Up to 3 levels: entry -> app chunk -> the chunks it imports.
+    for (let depth = 0; depth < 3; depth++) {
+      const next = [];
+      for (const u of frontier) {
+        let text = texts.get(u);
+        if (text === undefined && depth < 2) {
+          try {
+            text = await fetch(u).then((r) => r.text());
+            texts.set(u, text);
+          } catch {
+            continue;
+          }
+        }
+        if (text === undefined) continue;
+        for (const dep of specsOf(text, u)) {
+          if (await importUrl(dep)) next.push(dep);
+        }
+      }
+      frontier = next;
+      if (findClass(modules.map((m) => m.ns), SCENE) && depth >= 1) break;
+    }
+    // The module that actually holds the app code is the one exporting the
+    // scene manager; fall back to the entry script.
+    const app = modules.find((m) => findClass(m.ns, SCENE)) ?? modules[0];
+    if (!texts.has(app.url)) {
+      try {
+        texts.set(app.url, await fetch(app.url).then((r) => r.text()));
+      } catch {}
+    }
+    return { modules, app, appText: texts.get(app.url) };
   }
 
   function wrapMethod(cls, name, after, before) {
@@ -516,18 +579,21 @@
       console.warn(TAG, "couldn't find swervle.com's entry script; in-game features are off");
       return;
     }
-    let mod;
+    let game;
     try {
-      mod = await import(url);
+      game = await loadGameModules(url);
     } catch (err) {
-      console.error(TAG, "couldn't load swervle.com's entry module", err);
+      console.error(TAG, "couldn't load swervle.com's modules", err);
       return;
     }
+    const mods = game.modules.map((m) => m.ns);
+    const mod = game.app.ns; // the module that holds the app code
+    const appUrl = game.app.url;
 
     // Prototype hooks first (the game only uses these once a race starts).
-    const SceneManager = findClass(mod, ["consumeSnapshot", "consumeEvents", "viewParent", "materialRegistrar"]);
-    const AssetFactory = findClass(mod, ["instantiate", "preload"]);
-    const Renderer = findClass(mod, ["render", "precompile", "setComposerEnabled"]);
+    const SceneManager = findClass(mods, ["consumeSnapshot", "consumeEvents", "viewParent", "materialRegistrar"]);
+    const AssetFactory = findClass(mods, ["instantiate", "preload"]);
+    const Renderer = findClass(mods, ["render", "precompile", "setComposerEnabled"]);
     if (!SceneManager || !Renderer) {
       console.warn(TAG, "swervle.com's game classes weren't recognised; in-game features are off");
       return;
@@ -582,11 +648,9 @@
     });
 
     // Then everything that needs the entry script's text.
-    let text;
-    try {
-      text = await fetch(url).then((r) => r.text());
-    } catch (err) {
-      console.error(TAG, "couldn't read swervle.com's entry script", err);
+    const text = game.appText;
+    if (!text) {
+      console.error(TAG, "couldn't read swervle.com's app script");
       return;
     }
     const links = parseModuleLinks(text);
@@ -598,7 +662,7 @@
       if (exported !== undefined) return mod[exported];
       const imp = links.importsByLocal.get(local);
       if (!imp) return undefined;
-      const chunkUrl = new URL(imp.spec, url).href;
+      const chunkUrl = new URL(imp.spec, appUrl).href;
       if (!chunkCache.has(chunkUrl)) chunkCache.set(chunkUrl, import(chunkUrl));
       return (await chunkCache.get(chunkUrl))[imp.name];
     }
@@ -615,7 +679,7 @@
 
     // Values that aren't exported anywhere fall back to the exported copies
     // the game uses for other cars (same car, different default palette).
-    const exportedObjects = Object.values(mod).filter((v) => v && typeof v === "object");
+    const exportedObjects = mods.flatMap((m) => Object.values(m)).filter((v) => v && typeof v === "object");
     const fallbackOverrides = exportedObjects.find((v) => {
       const k = Object.keys(v);
       return k.length === 2 && k.includes("Car") && k.includes("Wheel");
@@ -623,15 +687,15 @@
     const fallbackAppearance = exportedObjects.find((v) => Array.isArray(v.geometries));
 
     pieces = {
-      RV: RV ?? findClass(mod, ["replayTickCount", "captureFrame", "step"]),
-      VD: VD ?? findClass(mod, ["copyInterpolatedChassisQuaternion", "consumeSnapshot", "update"]),
+      RV: RV ?? findClass(mods, ["replayTickCount", "captureFrame", "step"]),
+      VD: VD ?? findClass(mods, ["copyInterpolatedChassisQuaternion", "consumeSnapshot", "update"]),
       appearance: appearance ?? fallbackAppearance,
       definition,
       colorOverrides: colorOverrides ?? fallbackOverrides ?? { Car: 0xffffff },
       GhostView: makeGhostViewClass(Nameplate),
       generateTrack,
       modifiersFor,
-      liveryChunkUrl: names.liveryChunk ? new URL(names.liveryChunk, url).href : null,
+      liveryChunkUrl: names.liveryChunk ? new URL(names.liveryChunk, appUrl).href : null,
       // Used only if the game's own asset factory wasn't seen being used:
       // a separate factory for the same car asset.
       makeAssetFactory:
