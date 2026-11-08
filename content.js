@@ -176,7 +176,7 @@
     const hooks = await window.SwervleBridge.checkHooks();
     if (!hooks.available) return false;
 
-    let bytes, displayName;
+    let bytes, displayName, livery = info.livery ?? null;
     if (info.localBytes) {
       bytes = info.localBytes;
       displayName = info.displayName;
@@ -184,8 +184,12 @@
       const ghost = await window.SwervleAPI.getGhost(info.publicRunId);
       bytes = window.SwervleDecoder.decodeStatesBase64(ghost.statesBase64);
       displayName = ghost.publicDisplayName || info.displayName;
+      // The ghost response carries the driver's paint job ({design,
+      // gridSignature, revision}); without passing it on, every ghost
+      // falls back to a flat random colour.
+      if (ghost.livery && typeof ghost.livery.design === "string") livery = ghost.livery;
     }
-    const result = await window.SwervleBridge.spawnGhost(info.publicRunId, bytes, displayName, info.livery ?? null);
+    const result = await window.SwervleBridge.spawnGhost(info.publicRunId, bytes, displayName, livery);
     if (result.error) throw new Error(result.error);
 
     // Kept alongside the ghost (not just returned) so watchReplay can read
