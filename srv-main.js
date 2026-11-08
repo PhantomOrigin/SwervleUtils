@@ -226,16 +226,22 @@
     // race in place (same scene, no onRaceBoot) — restart every live ghost
     // back to its own start line so it replays from the beginning alongside
     // the player's new attempt, instead of continuing (or sitting finished)
-    // from wherever it was. Manual (currently-followed/watched) ghosts are
-    // exempt — they're independent of the player's own race entirely now
-    // (that's the whole point of giving them their own seek/speed), so a
-    // real retry shouldn't yank a replay you're scrubbing through back to
-    // its own start line.
+    // from wherever it was. That includes the watched (manual) ghost: pressing
+    // restart resets it to the start too, and it then waits at the line until
+    // the player's own timer actually starts (awaitGo, cleared in
+    // stepManualGhosts), so it runs level with every other ghost instead of
+    // restarting early and running ahead of the timer.
     if (telemetry.tick < lastTick - 5) {
       for (const g of ghosts.values()) {
-        if (g.disposed || g.manual) continue;
+        if (g.disposed) continue;
         try {
           g.rv.restart(g.states);
+          if (g.manual) {
+            if (!g.seeking) g.gl.consumeSnapshot(g.rv.frame.car); // snap the car back to the start line
+            g.manual.accumTicks = 0;
+            g.manual.lastTimestamp = null;
+            g.manual.awaitGo = true;
+          }
         } catch (err) {
           console.error("[Swervle Replay Viewer] ghost restart failed", err);
         }
@@ -300,7 +306,8 @@
       // than just skipping the accumulation below, so no backlog of real
       // elapsed time builds up to release all at once — a stopwatch that
       // was actually paused, not one that kept ticking unseen.
-      const holding = playerPhase === "countdown";
+      if (m.awaitGo && playerPhase === "racing") m.awaitGo = false; // the timer has started — release
+      const holding = playerPhase === "countdown" || m.awaitGo === true;
       if (m.lastTimestamp === null || holding) {
         m.lastTimestamp = now; // first frame after entering manual mode — nothing to step yet
       } else {
