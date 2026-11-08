@@ -1188,3 +1188,46 @@ html.srv-hide-all .race-hud {
 .srv-hotkey-btn {
   min-width: 64px;
 }
+
+/* Collapsed leaderboard / splits: a small square holding just the "+" button,
+   floating a little in from the screen edge, instead of a full-width bar. */
+.srv-board.srv-collapsed,
+.srv-splits.srv-collapsed {
+  box-sizing: border-box;
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 0.45rem;
+}
+.srv-board.srv-collapsed {
+  left: 8px;
+}
+.srv-splits.srv-collapsed {
+  right: 8px;
+}
+/* "ALL" mode stretches the board to full height; a collapsed one shouldn't. */
+.srv-board.srv-collapsed.srv-expanded {
+  top: 42vh;
+  bottom: auto;
+  display: block;
+}
+.srv-board.srv-collapsed .srv-board-header,
+.srv-splits.srv-collapsed .srv-splits-header {
+  height: 100%;
+  padding: 0;
+  gap: 0;
+  border-bottom: none;
+  justify-content: center;
+}
+.srv-board.srv-collapsed .srv-board-header > :not(.srv-board-collapse),
+.srv-splits.srv-collapsed .srv-splits-header > :not(.srv-splits-collapse),
+.srv-splits.srv-collapsed .srv-split-cols {
+  display: none;
+}
+.srv-board.srv-collapsed .srv-board-collapse,
+.srv-splits.srv-collapsed .srv-splits-collapse {
+  width: 100%;
+  height: 100%;
+  font-size: 18px;
+  padding: 0;
+}

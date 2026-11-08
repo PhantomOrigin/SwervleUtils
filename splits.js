@@ -78,7 +78,9 @@
     listEl = panelEl.querySelector(".srv-splits-list");
     panelEl.querySelector(".srv-splits-collapse").addEventListener("click", (e) => {
       panelEl.classList.toggle("srv-collapsed");
-      e.target.textContent = panelEl.classList.contains("srv-collapsed") ? "+" : "—";
+      const collapsed = panelEl.classList.contains("srv-collapsed");
+      e.target.textContent = collapsed ? "+" : "—";
+      e.target.title = collapsed ? "Expand splits" : "Collapse";
     });
 
     popupEl = document.createElement("div");

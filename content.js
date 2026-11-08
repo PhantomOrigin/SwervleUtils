@@ -943,7 +943,9 @@
     boardEl.querySelector(".srv-board-refresh").addEventListener("click", () => loadBoard());
     boardEl.querySelector(".srv-board-collapse").addEventListener("click", (e) => {
       boardEl.classList.toggle("srv-collapsed");
-      e.target.textContent = boardEl.classList.contains("srv-collapsed") ? "+" : "—";
+      const collapsed = boardEl.classList.contains("srv-collapsed");
+      e.target.textContent = collapsed ? "+" : "—";
+      e.target.title = collapsed ? "Expand leaderboard" : "Collapse";
     });
     boardEl.querySelector(".srv-board-expand").addEventListener("click", (e) => {
       expanded = !expanded;
