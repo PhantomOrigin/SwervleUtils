@@ -323,6 +323,7 @@
         this.label = null;
         if (nameplate && !this.nameplate) {
           const el = document.createElement("div");
+          el.className = "srv-nameplate";
           el.textContent = String(nameplate.label ?? nameplate);
           Object.assign(el.style, {
             position: "fixed", left: "0", top: "0", transform: "translate(-50%, -100%)",

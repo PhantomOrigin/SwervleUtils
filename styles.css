@@ -1087,6 +1087,7 @@ html.srv-hide-own-input-hud .srv-own-input-hud {
 }
 
 .srv-utils-hud-toggles .srv-setting-label,
+.srv-utils-hotkeys .srv-setting-label,
 .srv-utils-driving-toggles .srv-setting-label {
   display: flex;
   align-items: center;
@@ -1164,4 +1165,26 @@ html.srv-hide-own-input-hud .srv-own-input-hud {
 html.srv-hide-focus-border .game-canvas:focus-visible,
 html.srv-hide-focus-border .swervle-root .game-canvas:focus-visible {
   outline: none !important;
+}
+
+/* "Hide all UI" hotkey: visibility only (not display), because several of
+   these elements run their own display logic every frame. */
+html.srv-hide-all .srv-board,
+html.srv-hide-all .srv-splits,
+html.srv-hide-all .srv-split-popup,
+html.srv-hide-all .srv-spectate-hud,
+html.srv-hide-all .srv-input-hud,
+html.srv-hide-all .srv-own-input-hud,
+html.srv-hide-all .srv-replay-scrub,
+html.srv-hide-all .srv-input-analysis,
+html.srv-hide-all .srv-gear-hud,
+html.srv-hide-all .srv-ghost-bar,
+html.srv-hide-all .srv-gate-marker,
+html.srv-hide-all .srv-nameplate,
+html.srv-hide-all .srv-toast,
+html.srv-hide-all .race-hud {
+  visibility: hidden !important;
+}
+.srv-hotkey-btn {
+  min-width: 64px;
 }

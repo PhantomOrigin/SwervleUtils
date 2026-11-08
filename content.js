@@ -70,6 +70,7 @@
   // warning at all.
   function showToast(text, isError, persistent, linkUrl, linkText) {
     const el = document.createElement("div");
+    el.className = "srv-toast";
     el.style.cssText = `
       position:fixed; bottom:16px; left:50%; transform:translateX(-50%);
       background:${isError ? "#4a1f24" : "#191c24"}; color:#e6e9f0;
@@ -1525,6 +1526,72 @@
     wrap.appendChild(row);
   }
 
+  // ---- "hide all UI" hotkey (default M, rebindable in the Swervle Utils menu) ----
+  // Toggles html.srv-hide-all, which styles.css uses to hide every element this
+  // extension puts on screen (plus the game's own race HUD) — for clean
+  // screenshots/recordings. Visibility only: nothing is removed, so toggling
+  // back restores everything exactly as it was.
+  const HIDE_ALL_KEY_STORAGE = "srv-hide-all-key";
+  const DEFAULT_HIDE_ALL_KEY = "KeyM";
+  let rebindingHideAllKey = false;
+
+  function getHideAllKey() {
+    try {
+      return localStorage.getItem(HIDE_ALL_KEY_STORAGE) || DEFAULT_HIDE_ALL_KEY;
+    } catch {
+      return DEFAULT_HIDE_ALL_KEY;
+    }
+  }
+
+  function keyLabel(code) {
+    return code.replace(/^Key/, "").replace(/^Digit/, "").replace(/^Arrow/, "").replace(/^Numpad/, "Num ");
+  }
+
+  function setupHideAllHotkey() {
+    window.addEventListener(
+      "keydown",
+      (e) => {
+        if (rebindingHideAllKey || e.repeat || e.ctrlKey || e.altKey || e.metaKey) return;
+        if (e.code !== getHideAllKey()) return;
+        const t = e.target;
+        if (t instanceof HTMLElement && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+        document.documentElement.classList.toggle("srv-hide-all");
+      },
+      true
+    );
+  }
+
+  function buildHotkeyRow(wrap) {
+    const row = document.createElement("div");
+    row.className = "srv-setting-label";
+    const label = document.createElement("span");
+    label.textContent = "Hide all UI";
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "srv-btn srv-hotkey-btn";
+    const show = () => (btn.textContent = keyLabel(getHideAllKey()));
+    show();
+    btn.addEventListener("click", () => {
+      rebindingHideAllKey = true;
+      btn.textContent = "Press a key…";
+      const onKey = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        window.removeEventListener("keydown", onKey, true);
+        rebindingHideAllKey = false;
+        if (e.code !== "Escape") {
+          try {
+            localStorage.setItem(HIDE_ALL_KEY_STORAGE, e.code);
+          } catch {}
+        }
+        show();
+      };
+      window.addEventListener("keydown", onKey, true);
+    });
+    row.append(label, btn);
+    wrap.appendChild(row);
+  }
+
   let utilsOverlayEl = null;
 
   function buildUtilsMenu() {
@@ -1546,6 +1613,10 @@
           <div class="srv-utils-section-title">CAMERA &amp; CONTROLS</div>
           <div class="srv-utils-driving-toggles"></div>
         </div>
+        <div class="srv-utils-section">
+          <div class="srv-utils-section-title">HOTKEYS</div>
+          <div class="srv-utils-hotkeys"></div>
+        </div>
         <button type="button" class="srv-btn srv-utils-hud-editor-btn">Open HUD Editor</button>
         <div class="srv-utils-hint">Some settings need a page reload to take effect.</div>
       </div>
@@ -1558,6 +1629,8 @@
 
     const hudWrap = overlay.querySelector(".srv-utils-hud-toggles");
     for (const t of HUD_TOGGLES) buildToggleRow(hudWrap, t, { storageValueMeansHidden: true });
+
+    buildHotkeyRow(overlay.querySelector(".srv-utils-hotkeys"));
 
     const drivingWrap = overlay.querySelector(".srv-utils-driving-toggles");
     for (const setting of DRIVING_SETTINGS) buildToggleRow(drivingWrap, setting);
@@ -2131,6 +2204,7 @@
 
   function init() {
     reportPageLoadToBackground();
+    setupHideAllHotkey();
     applyHudVisibilityClasses();
     buildBoard();
     buildActiveGhostBar();

@@ -132,6 +132,7 @@
     for (const gate of gates) {
       const isFinish = gate.kind === "finish";
       const el = document.createElement("div");
+      el.className = "srv-gate-marker";
       el.textContent = isFinish ? "FINISH" : String(gate.index + 1);
       Object.assign(el.style, {
         position: "fixed",
