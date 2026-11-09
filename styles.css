@@ -1261,3 +1261,18 @@ html.srv-hide-all .srv-card-clone,
 html.srv-hide-all .srv-timer-clone {
   visibility: hidden !important;
 }
+/* The checkpoint copy has no progress bar, so its number row is centred
+   instead of sitting in the bar's old column. */
+.checkpoint-card.srv-card-clone .checkpoint-telemetry,
+.checkpoint-card.srv-card-clone .telemetry-row {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  gap: 0.28rem;
+}
+.checkpoint-card.srv-card-clone strong {
+  text-align: center;
+  width: 100%;
+}
