@@ -69,6 +69,8 @@
     // once the seek actually lands (real physics can only step forward, so
     // this is a fast-forward-from-scratch under the hood and isn't
     // instant for a large jump) — { key, error? }.
+    setReplayPaused: (paused) =>
+      document.dispatchEvent(new CustomEvent("srv:setReplayPaused", { detail: toPage({ paused }) })),
     seekReplay: (key, tick) => request("srv:seekReplay", { key, tick }, "srv:seekReplayResult"),
     onTick: (cb) => {
       const handler = (e) => cb(e.detail);

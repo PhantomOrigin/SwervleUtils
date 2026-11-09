@@ -202,14 +202,13 @@
     return true;
   }
 
-  // True while a replay is being watched: the game's own speed / checkpoint /
-  // timer cards are hidden and replaced by ones showing the REPLAY run, and the
-  // gear and input displays follow the replay instead of the player's car.
+  // True while a replay is being watched: the speed / checkpoint / gear cards
+  // and the gear + input displays show the REPLAY run instead of the player's
+  // car (see buildRaceCards below and the ghost-input listeners).
   function setWatchingUi(on) {
     document.documentElement.classList.toggle("srv-watching", on);
-    const hud = document.querySelector(".srv-watch-hud");
-    if (hud) hud.style.display = on ? "flex" : "none";
     if (!on) {
+      removeTimerClone();
       const gear = document.querySelector(".srv-gear-hud");
       if (gear) gear.style.display = "none"; // the player's own onTick feed takes over again
       updateOwnInputHudKeys();
@@ -229,6 +228,7 @@
       if (hud) hud.style.display = "none";
       const scrub = document.querySelector(".srv-replay-scrub");
       if (scrub) scrub.style.display = "none";
+      window.SwervleBridge.setReplayPaused(false);
       scrubDragging = false;
       analysisGeneration++; // invalidate any in-flight checkpoint lookup for the run just stopped
       const analysis = document.querySelector(".srv-input-analysis");
@@ -375,6 +375,15 @@
   // so it can be wider than that panel for finer scrub precision, per
   // feedback that embedding it there capped its width too tightly. ----
 
+  function fmtScrubTime(ticks) {
+    const sec = Math.max(0, ticks) / 60;
+    if (sec < 60) return sec.toFixed(2);
+    return `${Math.floor(sec / 60)}:${(sec % 60).toFixed(2).padStart(5, "0")}`;
+  }
+
+  // Lives inside the "Spectating ..." bar so the two read as one control:
+  // [pause] [slider] [32.51 / 37.00] [speed]. The total is the time the last
+  // active ghost needs to finish, and the bar drives every extension ghost.
   function buildReplayScrub() {
     if (document.querySelector(".srv-replay-scrub")) return;
     const scrub = document.createElement("div");
@@ -382,7 +391,9 @@
     scrub.style.display = "none";
     window.SwervleSetHtml(scrub, `
       <div class="srv-scrub-row">
+        <button class="srv-scrub-pause" type="button" title="Pause / resume">⏸</button>
         <input type="range" class="srv-scrub-slider" min="0" max="0" value="0" />
+        <span class="srv-scrub-label">0.00 / 0.00</span>
         <select class="srv-scrub-speed" title="Playback speed">
           <option value="0.25">.25x</option>
           <option value="0.5">.5x</option>
@@ -391,22 +402,32 @@
           <option value="4">4x</option>
         </select>
       </div>
-      <span class="srv-scrub-label">0 / 0</span>
     `);
-    buildSpectateHud().appendChild(scrub);
+    (document.querySelector(".srv-ghost-bar") || buildActiveGhostBar()).appendChild(scrub);
 
     const slider = scrub.querySelector(".srv-scrub-slider");
     const label = scrub.querySelector(".srv-scrub-label");
     const speedSelect = scrub.querySelector(".srv-scrub-speed");
+    const pauseBtn = scrub.querySelector(".srv-scrub-pause");
+    let paused = false;
+    const setPaused = (p) => {
+      paused = p;
+      pauseBtn.textContent = p ? "▶" : "⏸";
+      window.SwervleBridge.setReplayPaused(p);
+    };
+    scrub._reset = () => {
+      paused = false;
+      pauseBtn.textContent = "⏸";
+    };
+    pauseBtn.addEventListener("click", () => setPaused(!paused));
 
     slider.addEventListener("pointerdown", () => {
       scrubDragging = true;
     });
     // Live label feedback while dragging, without spamming seekReplay (a
-    // real fast-forward, not free) on every intermediate value as the
-    // thumb moves — the actual seek only fires once, on release.
+    // real fast-forward, not free) - the seek only fires once, on release.
     slider.addEventListener("input", () => {
-      label.textContent = `${slider.value} / ${slider.max}`;
+      label.textContent = `${fmtScrubTime(parseInt(slider.value, 10))} / ${fmtScrubTime(parseInt(slider.max, 10))}`;
     });
     slider.addEventListener("change", () => {
       scrubDragging = false;
@@ -416,26 +437,26 @@
       if (followedRunId) window.SwervleBridge.setReplaySpeed(followedRunId, parseFloat(speedSelect.value));
     });
 
-    window.SwervleBridge.onGhostInput(({ key, tick, totalTicks }) => {
+    window.SwervleBridge.onGhostInput(({ key, masterTick, masterTotal }) => {
       if (key !== followedRunId || scrubDragging) return;
-      if (typeof tick !== "number" || typeof totalTicks !== "number") return;
-      slider.max = Math.max(0, totalTicks - 1);
-      slider.value = tick;
-      label.textContent = `${tick} / ${slider.max}`;
+      if (typeof masterTick !== "number" || typeof masterTotal !== "number") return;
+      slider.max = Math.max(0, masterTotal);
+      slider.value = masterTick;
+      label.textContent = `${fmtScrubTime(masterTick)} / ${fmtScrubTime(masterTotal)}`;
     });
     return scrub;
   }
 
   function showReplayScrub() {
     const scrub = document.querySelector(".srv-replay-scrub") || buildReplayScrub();
-    // A fresh watch session — reset rather than briefly showing whatever
-    // position/max the previously-watched run left behind until the first
-    // live update arrives a frame later.
+    // A fresh watch session - reset rather than briefly showing whatever
+    // the previously-watched run left behind.
     const slider = scrub.querySelector(".srv-scrub-slider");
     slider.max = 0;
     slider.value = 0;
-    scrub.querySelector(".srv-scrub-label").textContent = "0 / 0";
+    scrub.querySelector(".srv-scrub-label").textContent = "0.00 / 0.00";
     scrub.querySelector(".srv-scrub-speed").value = "1";
+    scrub._reset?.();
     scrubDragging = false;
     scrub.style.display = "flex";
   }
@@ -604,9 +625,18 @@
   const FORWARD_GEAR_MAX_SPEEDS = [0, 5, 9, 13, 17, 22, 25, 27.5];
   const GEAR_HUD_HOT_THRESHOLD = 0.85; // fraction of the gear's range before the bar turns red
 
-  // ---- replay run's speed / checkpoint / timer (watch mode only), standing in
-  // for the game's own cards, which show the player's car and are hidden while
-  // watching (styles.css, html.srv-watching). ----
+  // ---- race cards: the game's own CHECKPOINT/GEAR and SPEED cards are replaced
+  // by ones in this extension's style, sitting exactly where the game's own
+  // are (including wherever the HUD editor has moved them), and fed from the
+  // player's own car in a normal run or from the replay car while one is being
+  // watched — so they stay put and look the same in both. The game's originals
+  // are only hidden (visibility), never removed: they keep their layout, which
+  // is what these follow. The timer is the game's own element, cloned while
+  // watching so it looks identical but shows the replay's time. ----
+  const raceCardValues = { cp: "0", gear: "1", speed: "0" };
+  let raceCardsLiveAt = 0; // last time a telemetry update arrived (either source)
+  let timerClone = null;
+
   function fmtWatchTime(ms) {
     const total = Math.max(0, ms) / 1000;
     const m = Math.floor(total / 60);
@@ -614,28 +644,109 @@
     return `${m}:${sec}`;
   }
 
-  function buildWatchHud() {
-    if (document.querySelector(".srv-watch-hud")) return;
-    const hud = document.createElement("div");
-    hud.className = "srv-watch-hud";
-    hud.style.display = "none";
-    window.SwervleSetHtml(hud, `
-      <div class="srv-watch-card"><small>CHECKPOINT</small><b class="srv-watch-cp">0</b></div>
-      <div class="srv-watch-card"><small>SPEED</small><b class="srv-watch-speed">0</b></div>
-      <div class="srv-watch-card srv-watch-timecard"><small>TIME</small><b class="srv-watch-time">0:00.000</b></div>
-    `);
-    document.body.appendChild(hud);
-    applyHudLayout("watch-hud", hud);
-    const cp = hud.querySelector(".srv-watch-cp");
-    const speed = hud.querySelector(".srv-watch-speed");
-    const time = hud.querySelector(".srv-watch-time");
-    window.SwervleBridge.onGhostInput(({ key, speed: v, gatesPassed, gateCount, timeMs }) => {
-      if (key !== followedRunId) return;
-      cp.textContent = gateCount ? `${gatesPassed}/${gateCount}` : String(gatesPassed);
-      speed.textContent = String(Math.max(0, Math.round(Math.abs(v ?? 0) * 3.6))); // m/s -> km/h, same as the game
-      time.textContent = fmtWatchTime(timeMs ?? 0);
+  function setRaceCardValues({ gatesPassed, gateCount, gear, speed }) {
+    raceCardValues.cp = gateCount ? `${gatesPassed}/${gateCount}` : String(gatesPassed ?? 0);
+    raceCardValues.gear = gear > 0 ? String(gear) : "-";
+    raceCardValues.speed = String(Math.max(0, Math.round(Math.abs(speed ?? 0) * 3.6))); // m/s -> km/h, same as the game
+    raceCardsLiveAt = performance.now();
+  }
+
+  // The game's timer, cloned (same classes, so identical styling) and laid
+  // over the original, which is hidden while watching (styles.css).
+  function updateTimerClone(text) {
+    const orig = document.querySelector(".hud-timer:not(.srv-timer-clone)");
+    if (!orig) return;
+    if (!timerClone || !timerClone.isConnected) {
+      timerClone = orig.cloneNode(true);
+      timerClone.classList.add("srv-timer-clone");
+      orig.insertAdjacentElement("afterend", timerClone);
+    }
+    const r = orig.getBoundingClientRect();
+    Object.assign(timerClone.style, {
+      position: "fixed",
+      left: `${r.left}px`,
+      top: `${r.top}px`,
+      width: `${r.width}px`,
+      height: `${r.height}px`,
+      margin: "0",
+      transform: "none",
     });
-    return hud;
+    // The text lives in one element somewhere inside; find it by its content.
+    const holder = [timerClone, ...timerClone.querySelectorAll("*")].find(
+      (el) => el.children.length === 0 && /\d:\d\d\.\d{2,3}/.test(el.textContent)
+    );
+    if (holder) holder.textContent = text;
+    else timerClone.textContent = text;
+  }
+
+  function removeTimerClone() {
+    timerClone?.remove();
+    timerClone = null;
+  }
+
+  function buildRaceCards() {
+    if (document.querySelector(".srv-race-card")) return;
+    const make = (cls, html) => {
+      const el = document.createElement("div");
+      el.className = `srv-race-card ${cls}`;
+      el.style.display = "none";
+      window.SwervleSetHtml(el, html);
+      document.body.appendChild(el);
+      return el;
+    };
+    const cpCard = make(
+      "srv-race-card-checkpoint",
+      `<small>CHECKPOINT</small><b class="srv-rc-cp">0</b><small>GEAR</small><b class="srv-rc-gear">1</b>`
+    );
+    const speedCard = make("srv-race-card-speed", `<small>SPEED</small><b class="srv-rc-speed">0</b>`);
+    const cpEl = cpCard.querySelector(".srv-rc-cp");
+    const gearEl = cpCard.querySelector(".srv-rc-gear");
+    const speedEl = speedCard.querySelector(".srv-rc-speed");
+
+    // Replay telemetry while watching; otherwise the player's own, from the game tick.
+    window.SwervleBridge.onTick(({ nextGateIndex, gateCount, gear, speed }) => {
+      if (followedRunId) return;
+      setRaceCardValues({ gatesPassed: nextGateIndex, gateCount, gear, speed });
+    });
+    window.SwervleBridge.onGhostInput((d) => {
+      if (d.key !== followedRunId) return;
+      setRaceCardValues(d);
+      updateTimerClone(fmtWatchTime(d.timeMs ?? 0));
+    });
+
+    const place = (card, nativeSel) => {
+      const native = document.querySelector(nativeSel);
+      const r = native?.getBoundingClientRect();
+      if (!native || !r || r.width === 0 || r.height === 0 || getComputedStyle(native).display === "none") {
+        card.style.display = "none";
+        return;
+      }
+      card.style.display = "flex";
+      Object.assign(card.style, {
+        left: `${r.left}px`,
+        top: `${r.top}px`,
+        minWidth: `${r.width}px`,
+        minHeight: `${r.height}px`,
+      });
+    };
+    const tick = () => {
+      // Only take over from the game's cards while our own feed is alive, so a
+      // game update that breaks the hooks leaves the game's own cards showing.
+      const live = performance.now() - raceCardsLiveAt < 3000;
+      document.documentElement.classList.toggle("srv-race-cards", live);
+      if (live) {
+        place(cpCard, ".checkpoint-card");
+        place(speedCard, ".speed-card");
+        if (cpEl.textContent !== raceCardValues.cp) cpEl.textContent = raceCardValues.cp;
+        if (gearEl.textContent !== raceCardValues.gear) gearEl.textContent = raceCardValues.gear;
+        if (speedEl.textContent !== raceCardValues.speed) speedEl.textContent = raceCardValues.speed;
+      } else {
+        cpCard.style.display = "none";
+        speedCard.style.display = "none";
+      }
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
   }
 
   function buildGearHud() {
@@ -712,8 +823,10 @@
     bar.className = "srv-ghost-bar";
     bar.style.display = "none";
     window.SwervleSetHtml(bar, `
-      <span class="srv-ghost-bar-label"></span>
-      <button class="srv-btn srv-ghost-bar-stop" type="button">Stop watching</button>
+      <div class="srv-ghost-bar-head">
+        <span class="srv-ghost-bar-label"></span>
+        <button class="srv-btn srv-ghost-bar-stop" type="button">Stop watching</button>
+      </div>
     `);
     buildSpectateHud().appendChild(bar);
     bar.querySelector(".srv-ghost-bar-stop").addEventListener("click", () => {
@@ -1926,7 +2039,7 @@
         buildActiveGhostBar();
       },
       el: () => document.querySelector(".srv-spectate-hud"),
-      children: () => [".srv-input-hud", ".srv-replay-scrub", ".srv-ghost-bar"].map((s) => document.querySelector(s)).filter(Boolean),
+      children: () => [".srv-input-hud", ".srv-ghost-bar"].map((s) => document.querySelector(s)).filter(Boolean),
     },
     {
       key: "gear-hud",
@@ -2289,7 +2402,7 @@
     buildInputHud();
     buildReplayScrub();
     buildGearHud();
-    buildWatchHud();
+    buildRaceCards();
     buildOwnInputHud();
     window.SwervleSplits?.init();
     loadBoard();

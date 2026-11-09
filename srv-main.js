@@ -251,13 +251,15 @@
     // stepManualGhosts), so it runs level with every other ghost instead of
     // restarting early and running ahead of the timer.
     if (telemetry.tick < lastTick - 5) {
+      master.tick = 0;
+      master.accum = 0;
       for (const g of ghosts.values()) {
         if (g.disposed) continue;
         try {
           g.rv.restart(g.states);
           resetGhostProgress(g);
+          if (!g.seeking) g.gl.consumeSnapshot(g.rv.frame.car); // snap the car back to the start line
           if (g.manual) {
-            if (!g.seeking) g.gl.consumeSnapshot(g.rv.frame.car); // snap the car back to the start line
             g.manual.accumTicks = 0;
             g.manual.lastTimestamp = null;
             g.manual.awaitGo = true;
@@ -274,7 +276,7 @@
         // Manual ghosts step from onRender on their own virtual clock (see
         // stepManualGhosts below), not here — this loop is only for ghosts
         // still synced 1:1 to the player's real race ticks.
-        if (g.disposed || g.manual || g.rv.finished) continue;
+        if (g.disposed || g.manual || followKey !== null || g.rv.finished) continue;
         try {
           stepGhost(g);
           // consumeSnapshot only needs the fresh tick data step() just
@@ -312,57 +314,69 @@
   // ghost (the live input-overlay/progress-bar feed) — onTick no longer
   // touches manual ghosts at all, so that dispatch moved here with it.
   const MAX_STEPS_PER_FRAME = 30; // guards a huge catch-up burst after e.g. a backgrounded tab
+  // One shared clock for the whole watch session: every extension ghost
+  // (not just the followed one) is stepped from it, so pause, speed and the
+  // scrub bar affect all of them together. Ghosts all start at tick 0, so a
+  // given master tick is the same moment in every run.
+  const master = { tick: 0, accum: 0, paused: false };
+  function masterTotal() {
+    let t = 0;
+    for (const g of ghosts.values()) if (!g.disposed) t = Math.max(t, g.states.length);
+    return t;
+  }
   function stepManualGhosts(now) {
-    for (const [key, g] of ghosts) {
-      if (g.disposed || !g.manual || g.seeking) continue;
-      const m = g.manual;
-      // Held during the player's own countdown — same as it always used to
-      // be for every ghost before manual mode existed, so a replay you're
-      // watching lines up with "GO" instead of having already been running
-      // (or fast-forwarding away) throughout the countdown. Not gated on
-      // any other phase (including no race booted at all), which is
-      // exactly what lets a replay be watched/scrubbed outside of actually
-      // racing in the first place. Keeps resetting lastTimestamp rather
-      // than just skipping the accumulation below, so no backlog of real
-      // elapsed time builds up to release all at once — a stopwatch that
-      // was actually paused, not one that kept ticking unseen.
-      if (m.awaitGo && playerPhase === "racing") m.awaitGo = false; // the timer has started — release
-      const holding = playerPhase === "countdown" || m.awaitGo === true;
-      if (m.lastTimestamp === null || holding) {
-        m.lastTimestamp = now; // first frame after entering manual mode — nothing to step yet
-      } else {
-        const dt = (now - m.lastTimestamp) / 1000;
-        m.lastTimestamp = now;
-        if (!g.rv.finished) {
-          m.accumTicks += dt * TICK_RATE * m.speed;
-          let steps = Math.min(MAX_STEPS_PER_FRAME, Math.floor(m.accumTicks));
-          if (steps > 0) {
-            m.accumTicks -= steps;
+    const fg = followKey !== null ? ghosts.get(followKey) : null;
+    if (!fg || fg.disposed || !fg.manual || fg.seeking) return;
+    const m = fg.manual;
+    // Held during the player's own countdown, and after a restart until the
+    // player's timer starts (awaitGo), so replays line up with "GO". Also held
+    // while paused. Keeps resetting lastTimestamp rather than skipping the
+    // accumulation, so no backlog of real time builds up to release at once.
+    if (m.awaitGo && playerPhase === "racing") m.awaitGo = false;
+    const holding = playerPhase === "countdown" || m.awaitGo === true || master.paused;
+    const total = masterTotal();
+    if (m.lastTimestamp === null || holding) {
+      m.lastTimestamp = now;
+    } else {
+      const dt = (now - m.lastTimestamp) / 1000;
+      m.lastTimestamp = now;
+      if (master.tick < total) {
+        master.accum += dt * TICK_RATE * m.speed;
+        let steps = Math.min(MAX_STEPS_PER_FRAME, Math.floor(master.accum));
+        if (steps > 0) {
+          master.accum -= steps;
+          master.tick = Math.min(total, master.tick + steps);
+          for (const g of ghosts.values()) {
+            if (g.disposed || g.seeking) continue;
             try {
-              while (steps-- > 0 && !g.rv.finished) stepGhost(g);
+              let n = steps;
+              while (n-- > 0 && !g.rv.finished) stepGhost(g);
               g.gl.consumeSnapshot(g.rv.frame.car);
             } catch (err) {
-              console.error("[Swervle Replay Viewer] manual ghost step failed", err);
+              console.error("[Swervle Replay Viewer] ghost step failed", err);
             }
           }
         }
       }
-      const car = g.rv.frame?.car;
-      dispatch("srv:ghostInput", {
-        key,
-        inputByte: g.states[g.rv.replayTick] ?? 0,
-        tick: g.rv.replayTick,
-        totalTicks: g.states.length,
-        finished: g.rv.finished,
-        // What the watch-mode HUD shows in place of the player's own run.
-        speed: car?.speed ?? 0,
-        gear: car?.gear ?? 0,
-        shiftTimer: car?.shiftTimer ?? 0,
-        gatesPassed: g.gatesPassed ?? 0,
-        gateCount: window.__srv.ready?.track?.gates?.length ?? 0,
-        timeMs: g.finishMs ?? (g.rv.replayTick * 1000) / TICK_RATE,
-      });
     }
+    const car = fg.rv.frame?.car;
+    dispatch("srv:ghostInput", {
+      key: followKey,
+      inputByte: fg.states[fg.rv.replayTick] ?? 0,
+      tick: fg.rv.replayTick,
+      totalTicks: fg.states.length,
+      masterTick: master.tick,
+      masterTotal: total,
+      paused: master.paused,
+      finished: fg.rv.finished,
+      // What the watch-mode HUD shows in place of the player's own run.
+      speed: car?.speed ?? 0,
+      gear: car?.gear ?? 0,
+      shiftTimer: car?.shiftTimer ?? 0,
+      gatesPassed: fg.gatesPassed ?? 0,
+      gateCount: window.__srv.ready?.track?.gates?.length ?? 0,
+      timeMs: fg.finishMs ?? (fg.rv.replayTick * 1000) / TICK_RATE,
+    });
   }
 
   // The camera's view matrix is normally refreshed by the renderer AFTER this
@@ -459,7 +473,7 @@
   // chase-camera and the ghost's own visible-mesh update so they always
   // agree on exactly how far into the current tick interval "now" is.
   function getGhostAlpha(g, siteAlpha) {
-    return g.manual ? Math.min(1, Math.max(0, g.manual.accumTicks)) : siteAlpha;
+    return followKey !== null ? Math.min(1, Math.max(0, master.accum)) : siteAlpha;
   }
 
   // A watched replay is meant to look exactly like you're driving it
@@ -803,26 +817,30 @@
   // dropped frame instead of visibly fast-forwarding through every one in
   // between.
   async function seekGhost(key, targetTick) {
-    const g = ghosts.get(key);
-    if (!g || g.disposed) throw new Error("That ghost isn't live right now.");
-    const clamped = Math.max(0, Math.min(Math.floor(targetTick), g.states.length - 1));
-    g.seeking = true; // pause stepManualGhosts' own stepping while this loop owns rv.step()
+    const fg = ghosts.get(key);
+    if (!fg || fg.disposed) throw new Error("That ghost isn't live right now.");
+    // Every extension ghost is moved to the same moment, so the scrub bar
+    // controls the whole session, not just the followed run.
+    const live = [...ghosts.values()].filter((g) => !g.disposed);
+    const clamped = Math.max(0, Math.min(Math.floor(targetTick), masterTotal()));
+    for (const g of live) g.seeking = true; // pause stepManualGhosts while this loop owns rv.step()
     try {
-      g.rv.restart(g.states);
-      resetGhostProgress(g);
+      for (const g of live) {
+        g.rv.restart(g.states);
+        resetGhostProgress(g);
+      }
       const CHUNK_SIZE = 25;
       for (let i = 0; i < clamped; i++) {
-        if (g.disposed) return; // stopped watching mid-seek
-        stepGhost(g);
+        if (fg.disposed) return; // stopped watching mid-seek
+        for (const g of live) if (!g.disposed && !g.rv.finished) stepGhost(g);
         if (i % CHUNK_SIZE === CHUNK_SIZE - 1) await nextFrame();
       }
-      g.gl.consumeSnapshot(g.rv.frame.car);
+      for (const g of live) if (!g.disposed) g.gl.consumeSnapshot(g.rv.frame.car);
+      master.tick = clamped;
+      master.accum = 0;
     } finally {
-      g.seeking = false;
-      if (g.manual) {
-        g.manual.accumTicks = 0;
-        g.manual.lastTimestamp = null; // next stepManualGhosts tick just resyncs the clock, doesn't jump
-      }
+      for (const g of live) g.seeking = false;
+      if (fg.manual) fg.manual.lastTimestamp = null; // next stepManualGhosts tick just resyncs the clock, doesn't jump
     }
   }
 
@@ -926,6 +944,20 @@
     if (followKey !== null) {
       const g = ghosts.get(followKey);
       if (g) g.manual = { speed: 1, accumTicks: 0, lastTimestamp: null };
+      // Start a fresh session: everything back at the start line on the shared clock.
+      master.tick = 0;
+      master.accum = 0;
+      master.paused = false;
+      for (const og of ghosts.values()) {
+        if (og.disposed) continue;
+        try {
+          og.rv.restart(og.states);
+          resetGhostProgress(og);
+          og.gl.consumeSnapshot(og.rv.frame.car);
+        } catch (err) {
+          console.error("[Swervle Replay Viewer] ghost reset failed", err);
+        }
+      }
     }
     window.__srvWatchingReplay = followKey !== null;
     updateWatchingReplayActive();
@@ -935,6 +967,10 @@
     const { key, speed } = e.detail || {};
     const g = ghosts.get(key);
     if (g?.manual && Number.isFinite(speed) && speed > 0) g.manual.speed = speed;
+  });
+
+  document.addEventListener("srv:setReplayPaused", (e) => {
+    master.paused = !!e.detail?.paused;
   });
 
   document.addEventListener("srv:seekReplay", async (e) => {
