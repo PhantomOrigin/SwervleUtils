@@ -1261,18 +1261,34 @@ html.srv-hide-all .srv-card-clone,
 html.srv-hide-all .srv-timer-clone {
   visibility: hidden !important;
 }
-/* The checkpoint copy has no progress bar, so its number row is centred
-   instead of sitting in the bar's old column. */
-.checkpoint-card.srv-card-clone .checkpoint-telemetry,
-.checkpoint-card.srv-card-clone .telemetry-row {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  gap: 0.28rem;
+/* The checkpoint copy (no gear row) is laid out like the speed card: label,
+   big Impact number, and a segmented progress bar along the bottom. */
+.checkpoint-card.srv-card-clone .checkpoint-telemetry {
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  text-align: center;
 }
-.checkpoint-card.srv-card-clone strong {
+.checkpoint-card.srv-card-clone .checkpoint-telemetry small {
+  place-items: center;
   text-align: center;
   width: 100%;
+}
+.checkpoint-card.srv-card-clone .checkpoint-telemetry strong {
+  font-family: Impact, sans-serif;
+  font-size: 2.5rem;
+  letter-spacing: 0.025em;
+  white-space: nowrap;
+}
+.checkpoint-card.srv-card-clone .progress-track {
+  display: flex;
+  gap: 2px;
+  width: 100%;
+  height: 0.28rem;
+  background: none;
+  border-radius: 0;
+}
+.checkpoint-card.srv-card-clone .progress-track i {
+  flex: 1 1 0;
+  height: 100%;
+  border-radius: 1rem;
+  background-color: rgba(255, 255, 255, 0.15);
 }

@@ -633,7 +633,7 @@
   // are only hidden (visibility), never removed: they keep their layout, which
   // is what these follow. The timer is the game's own element, cloned while
   // watching so it looks identical but shows the replay's time. ----
-  const raceCardValues = { cp: "0", gear: "1", speed: "0" };
+  const raceCardValues = { cp: "0", gear: "1", speed: "0", passed: 0, gates: 0 };
   let raceCardsLiveAt = 0; // last time a telemetry update arrived (either source)
   let timerClone = null;
 
@@ -646,6 +646,8 @@
 
   function setRaceCardValues({ gatesPassed, gateCount, gear, speed }) {
     raceCardValues.cp = String(gatesPassed ?? 0);
+    raceCardValues.passed = gatesPassed ?? 0;
+    raceCardValues.gates = gateCount ?? 0;
     raceCardValues.gear = gear > 0 ? String(gear) : "-";
     raceCardValues.speed = String(Math.max(0, Math.round(Math.abs(speed ?? 0) * 3.6))); // m/s -> km/h, same as the game
     raceCardsLiveAt = performance.now();
@@ -748,13 +750,28 @@
         // Checkpoint only: the game's card also has a GEAR row, which the
         // extension's own rev bar replaces.
         const cp = ensureCardClone(".checkpoint-card", (clone) => {
-          clone.querySelectorAll("small").forEach((n, i) => i > 0 && n.remove());
-          clone.querySelectorAll(".telemetry-row").forEach((n, i) => i > 0 && n.remove());
-          clone.querySelectorAll(".progress-track").forEach((n) => n.remove());
+          // Label, big number, segment bar - laid out like the speed card.
+          const tele = clone.querySelector(".checkpoint-telemetry");
+          const label = clone.querySelector("small");
+          const number = clone.querySelector("strong");
+          const track = clone.querySelector(".progress-track");
+          if (!tele || !label || !number) return;
+          tele.replaceChildren(label, number);
+          if (track) tele.appendChild(track);
         });
         if (cp) {
           sync(cp);
           setCardText(cp.clone.querySelector("strong"), raceCardValues.cp);
+          const track = cp.clone.querySelector(".progress-track");
+          if (track) {
+            const n = raceCardValues.gates;
+            while (track.children.length > n) track.lastChild.remove();
+            while (track.children.length < n) track.appendChild(document.createElement("i"));
+            [...track.children].forEach((seg, i) => {
+              seg.style.width = "auto";
+              seg.style.background = i < raceCardValues.passed ? "var(--yellow)" : "";
+            });
+          }
         }
         const sp = ensureCardClone(".speed-card", () => {});
         if (sp) {
