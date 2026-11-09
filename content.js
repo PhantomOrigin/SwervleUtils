@@ -1971,8 +1971,37 @@
   function saveHudLayout(key, el) {
     const left = parseFloat(el.style.left) || 0;
     const top = parseFloat(el.style.top) || 0;
-    localStorage.setItem(hudLayoutStorageKey(key), JSON.stringify({ left, top, scale: getHudScale(el) }));
+    // Also remember which edges it sits closest to and how far from them, so a
+    // taller or wider viewport (fullscreen) keeps it hugging the same edge
+    // instead of leaving it the same distance from the top-left corner.
+    const r = el.getBoundingClientRect();
+    const ax = r.left + r.width / 2 > window.innerWidth / 2 ? "r" : "l";
+    const ay = r.top + r.height / 2 > window.innerHeight / 2 ? "b" : "t";
+    localStorage.setItem(
+      hudLayoutStorageKey(key),
+      JSON.stringify({
+        left,
+        top,
+        scale: getHudScale(el),
+        ax,
+        ay,
+        ar: window.innerWidth - r.right,
+        ab: window.innerHeight - r.bottom,
+      })
+    );
   }
+
+  // Elements a stored layout has been applied to, so it can be re-applied when
+  // the viewport size changes (window resize, entering/leaving fullscreen).
+  const appliedHudLayouts = new Map(); // key -> el
+  function reapplyHudLayouts() {
+    if (typeof hudEditorState !== "undefined" && hudEditorState) return;
+    for (const [key, el] of appliedHudLayouts) {
+      if (el.isConnected) applyHudLayout(key, el);
+    }
+  }
+  window.addEventListener("resize", reapplyHudLayouts);
+  document.addEventListener("fullscreenchange", () => setTimeout(reapplyHudLayouts, 100));
 
   // Returns whether a stored layout actually existed and was applied —
   // callers with their own recurring auto-position logic (e.g. splits.js's
@@ -1985,6 +2014,15 @@
     setHudFixedRect(el, layout.left, layout.top);
     el.style.transformOrigin = "top left";
     el.style.transform = layout.scale && layout.scale !== 1 ? `scale(${layout.scale})` : "none";
+    appliedHudLayouts.set(key, el);
+    if (layout.ax === "r" || layout.ay === "b") {
+      const r = el.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0) {
+        const left = layout.ax === "r" ? window.innerWidth - layout.ar - r.width : layout.left;
+        const top = layout.ay === "b" ? window.innerHeight - layout.ab - r.height : layout.top;
+        setHudFixedRect(el, left, top);
+      }
+    }
     return true;
   }
 
@@ -1998,6 +2036,7 @@
   // still applies wherever it happens to sit in the DOM.
   function resetHudLayout(key, el) {
     localStorage.removeItem(hudLayoutStorageKey(key));
+    appliedHudLayouts.delete(key);
     if (!el) return;
     const original = hudOriginalParents.get(el);
     if (original?.parent) {
