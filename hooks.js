@@ -599,6 +599,21 @@
       console.warn(TAG, "swervle.com's game classes weren't recognised; in-game features are off");
       return;
     }
+    // While a replay is being watched, srv-main.js supplies the replay car's
+    // data for the game's engine/surface/landing sounds in place of the player's.
+    const AudioEngine = findClass(mods, ["setEngine", "setSurface", "observeContact", "stopVehicle"]);
+    for (const name of ["setEngine", "setSurface", "observeContact"]) {
+      wrapMethod(AudioEngine, name, null, (_self, args) => {
+        if (args[0] == null || typeof srv.audioReplace !== "function") return;
+        let replaced;
+        try {
+          replaced = srv.audioReplace(name, args[0]);
+        } catch (err) {
+          console.error(TAG, "audio replacement failed", err);
+        }
+        if (replaced) args[0] = replaced;
+      });
+    }
     wrapMethod(AssetFactory, "instantiate", null, (self) => {
       assetFactory = self;
     });

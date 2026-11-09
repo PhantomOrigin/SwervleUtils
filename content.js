@@ -202,12 +202,27 @@
     return true;
   }
 
+  // True while a replay is being watched: the game's own speed / checkpoint /
+  // timer cards are hidden and replaced by ones showing the REPLAY run, and the
+  // gear and input displays follow the replay instead of the player's car.
+  function setWatchingUi(on) {
+    document.documentElement.classList.toggle("srv-watching", on);
+    const hud = document.querySelector(".srv-watch-hud");
+    if (hud) hud.style.display = on ? "flex" : "none";
+    if (!on) {
+      const gear = document.querySelector(".srv-gear-hud");
+      if (gear) gear.style.display = "none"; // the player's own onTick feed takes over again
+      updateOwnInputHudKeys();
+    }
+  }
+
   function hideGhost(publicRunId) {
     if (!visibleGhosts.has(publicRunId)) return;
     window.SwervleBridge.despawnGhost(publicRunId);
     visibleGhosts.delete(publicRunId);
     if (followedRunId === publicRunId) {
       followedRunId = null;
+      setWatchingUi(false);
       const bar = document.querySelector(".srv-ghost-bar");
       if (bar) bar.style.display = "none";
       const hud = document.querySelector(".srv-input-hud");
@@ -278,8 +293,10 @@
     return hud;
   }
 
+  // The separate held-keys display for a watched replay is no longer shown:
+  // the player's own input display (below) shows the replay's inputs instead.
   function showInputHud() {
-    (document.querySelector(".srv-input-hud") || buildInputHud()).style.display = "grid";
+    document.querySelector(".srv-input-hud") || buildInputHud();
   }
 
   // ---- live input overlay for YOUR OWN driving (always available while
@@ -302,7 +319,7 @@
 
   function updateOwnInputHudKeys() {
     const hud = document.querySelector(".srv-own-input-hud");
-    if (!hud) return;
+    if (!hud || followedRunId) return; // while watching, the replay's inputs drive it (see buildOwnInputHud)
     for (const [key, codes] of Object.entries(OWN_INPUT_KEY_CODES)) {
       const active = codes.some((c) => ownHeldCodes.has(c));
       hud.querySelector(`[data-key="${key}"]`)?.classList.toggle("active", active);
@@ -338,7 +355,17 @@
     // Same active-phase gating as the gear HUD — only while actually
     // counting down or racing, not on the pause/result/menu screens.
     window.SwervleBridge.onTick(({ phase }) => {
+      if (followedRunId) return; // watching: shown and driven by the replay below
       hud.style.display = phase === "countdown" || phase === "racing" ? "grid" : "none";
+    });
+    // Watching a replay: show the replay run's inputs here instead of yours.
+    window.SwervleBridge.onGhostInput(({ key, inputByte }) => {
+      if (key !== followedRunId) return;
+      hud.style.display = "grid";
+      const input = window.SwervleDecoder.readInputByte(inputByte);
+      hud.querySelectorAll(".srv-own-hud-key").forEach((el) => {
+        el.classList.toggle("active", !!input[el.dataset.key]);
+      });
     });
     return hud;
   }
@@ -577,6 +604,40 @@
   const FORWARD_GEAR_MAX_SPEEDS = [0, 5, 9, 13, 17, 22, 25, 27.5];
   const GEAR_HUD_HOT_THRESHOLD = 0.85; // fraction of the gear's range before the bar turns red
 
+  // ---- replay run's speed / checkpoint / timer (watch mode only), standing in
+  // for the game's own cards, which show the player's car and are hidden while
+  // watching (styles.css, html.srv-watching). ----
+  function fmtWatchTime(ms) {
+    const total = Math.max(0, ms) / 1000;
+    const m = Math.floor(total / 60);
+    const sec = (total % 60).toFixed(3).padStart(6, "0");
+    return `${m}:${sec}`;
+  }
+
+  function buildWatchHud() {
+    if (document.querySelector(".srv-watch-hud")) return;
+    const hud = document.createElement("div");
+    hud.className = "srv-watch-hud";
+    hud.style.display = "none";
+    window.SwervleSetHtml(hud, `
+      <div class="srv-watch-card"><small>CHECKPOINT</small><b class="srv-watch-cp">0</b></div>
+      <div class="srv-watch-card"><small>SPEED</small><b class="srv-watch-speed">0</b></div>
+      <div class="srv-watch-card srv-watch-timecard"><small>TIME</small><b class="srv-watch-time">0:00.000</b></div>
+    `);
+    document.body.appendChild(hud);
+    applyHudLayout("watch-hud", hud);
+    const cp = hud.querySelector(".srv-watch-cp");
+    const speed = hud.querySelector(".srv-watch-speed");
+    const time = hud.querySelector(".srv-watch-time");
+    window.SwervleBridge.onGhostInput(({ key, speed: v, gatesPassed, gateCount, timeMs }) => {
+      if (key !== followedRunId) return;
+      cp.textContent = gateCount ? `${gatesPassed}/${gateCount}` : String(gatesPassed);
+      speed.textContent = String(Math.max(0, Math.round(Math.abs(v ?? 0) * 3.6))); // m/s -> km/h, same as the game
+      time.textContent = fmtWatchTime(timeMs ?? 0);
+    });
+    return hud;
+  }
+
   function buildGearHud() {
     if (document.querySelector(".srv-gear-hud")) return;
     const hud = document.createElement("div");
@@ -591,10 +652,7 @@
     const numberEl = hud.querySelector(".srv-gear-hud-number");
     const fillEl = hud.querySelector(".srv-gear-hud-fill");
 
-    window.SwervleBridge.onTick(({ phase, gear, shiftTimer, speed }) => {
-      const active = phase === "countdown" || phase === "racing";
-      hud.style.display = active ? "flex" : "none";
-      if (!active) return;
+    const render = (gear, shiftTimer, speed) => {
       numberEl.textContent = gear > 0 ? gear : "-";
 
       // Neutral/stationary/reverse (gear <= 0, or off the end of the table)
@@ -614,6 +672,19 @@
       // just happened, so flash the gear number briefly rather than just
       // snapping to the new digit with no feedback.
       hud.classList.toggle("srv-gear-hud-shifting", (shiftTimer ?? 0) > 0);
+    };
+
+    window.SwervleBridge.onTick(({ phase, gear, shiftTimer, speed }) => {
+      if (followedRunId) return; // watching: driven by the replay below
+      const active = phase === "countdown" || phase === "racing";
+      hud.style.display = active ? "flex" : "none";
+      if (active) render(gear, shiftTimer, speed);
+    });
+    // Watching a replay: show the replay car's gear instead of yours.
+    window.SwervleBridge.onGhostInput(({ key, gear, shiftTimer, speed }) => {
+      if (key !== followedRunId) return;
+      hud.style.display = "flex";
+      render(gear, shiftTimer, speed);
     });
     return hud;
   }
@@ -673,6 +744,7 @@
       if (spawnedLive) {
         if (followedRunId && followedRunId !== info.publicRunId) hideGhost(followedRunId);
         followedRunId = info.publicRunId;
+        setWatchingUi(true);
         window.SwervleBridge.setCameraFollow(info.publicRunId);
         showActiveGhostBar(`Spectating ${info.displayName}'s replay (not your run)`);
         showInputAnalysis(visibleGhosts.get(info.publicRunId)?.bytes);
@@ -2217,6 +2289,7 @@
     buildInputHud();
     buildReplayScrub();
     buildGearHud();
+    buildWatchHud();
     buildOwnInputHud();
     window.SwervleSplits?.init();
     loadBoard();

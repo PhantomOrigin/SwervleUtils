@@ -216,6 +216,25 @@
   // tick steps every live ghost exactly once, so a ghost's own countdown
   // lines up with the player's instead of it having ticked in the
   // background the whole time.
+  // One physics step of a ghost's replay, plus bookkeeping the watch-mode HUD
+  // needs: how many checkpoints it has passed and, once it finishes, the
+  // game's own exact finish time. (Ghost replays are created with
+  // capturePresentationData, so each frame carries the race events from that step.)
+  function stepGhost(g) {
+    g.rv.step();
+    for (const ev of g.rv.frame.events ?? []) {
+      if (ev.type === "race-checkpoint" || ev.type === "race-finish") {
+        const passed = Number.isFinite(ev.payload?.nextGateIndex) ? ev.payload.nextGateIndex : (ev.payload?.gateIndex ?? 0) + 1;
+        g.gatesPassed = Math.max(g.gatesPassed ?? 0, passed);
+        if (ev.type === "race-finish" && Number.isFinite(ev.payload?.displayTimeMs)) g.finishMs = ev.payload.displayTimeMs;
+      }
+    }
+  }
+  function resetGhostProgress(g) {
+    g.gatesPassed = 0;
+    g.finishMs = null;
+  }
+
   window.__srv.onTick = (telemetry) => {
     dispatch("srv:tick", telemetry);
     nextGateIndex = telemetry.nextGateIndex ?? nextGateIndex;
@@ -236,6 +255,7 @@
         if (g.disposed) continue;
         try {
           g.rv.restart(g.states);
+          resetGhostProgress(g);
           if (g.manual) {
             if (!g.seeking) g.gl.consumeSnapshot(g.rv.frame.car); // snap the car back to the start line
             g.manual.accumTicks = 0;
@@ -256,7 +276,7 @@
         // still synced 1:1 to the player's real race ticks.
         if (g.disposed || g.manual || g.rv.finished) continue;
         try {
-          g.rv.step();
+          stepGhost(g);
           // consumeSnapshot only needs the fresh tick data step() just
           // produced — it does NOT depend on alpha/render-frame timing —
           // so it belongs here, once per tick, not in onRender. It used to
@@ -319,7 +339,7 @@
           if (steps > 0) {
             m.accumTicks -= steps;
             try {
-              while (steps-- > 0 && !g.rv.finished) g.rv.step();
+              while (steps-- > 0 && !g.rv.finished) stepGhost(g);
               g.gl.consumeSnapshot(g.rv.frame.car);
             } catch (err) {
               console.error("[Swervle Replay Viewer] manual ghost step failed", err);
@@ -327,12 +347,20 @@
           }
         }
       }
+      const car = g.rv.frame?.car;
       dispatch("srv:ghostInput", {
         key,
         inputByte: g.states[g.rv.replayTick] ?? 0,
         tick: g.rv.replayTick,
         totalTicks: g.states.length,
         finished: g.rv.finished,
+        // What the watch-mode HUD shows in place of the player's own run.
+        speed: car?.speed ?? 0,
+        gear: car?.gear ?? 0,
+        shiftTimer: car?.shiftTimer ?? 0,
+        gatesPassed: g.gatesPassed ?? 0,
+        gateCount: window.__srv.ready?.track?.gates?.length ?? 0,
+        timeMs: g.finishMs ?? (g.rv.replayTick * 1000) / TICK_RATE,
       });
     }
   }
@@ -615,7 +643,7 @@
     const ready = window.__srv.ready;
     if (!ready) throw new Error("Live hooks unavailable (the race isn't ready yet)");
 
-    const rv = new ready.RV({ modifiers: ready.modifiers, states, track: ready.track });
+    const rv = new ready.RV({ modifiers: ready.modifiers, states, track: ready.track, capturePresentationData: true });
     const initial = rv.create();
     let carView, gl, liveryHandle;
     try {
@@ -661,7 +689,7 @@
     // live ghost exactly once per real physics tick (and only while the
     // real race is actually racing), so a ghost's own countdown/start lines
     // up with the player's.
-    ghosts.set(key, { rv, gl, states, liveryHandle, disposed: false, manual: null, seeking: false });
+    ghosts.set(key, { rv, gl, states, liveryHandle, disposed: false, manual: null, seeking: false, gatesPassed: 0, finishMs: null });
     console.log(`[Swervle Replay Viewer] spawnGhostOnce ADDED key=${key} ghosts.size=${ghosts.size} carView.root.uuid=${carView.root.uuid} viewParent.children.length=${ready.viewParent.children.length}`);
   }
 
@@ -781,10 +809,11 @@
     g.seeking = true; // pause stepManualGhosts' own stepping while this loop owns rv.step()
     try {
       g.rv.restart(g.states);
+      resetGhostProgress(g);
       const CHUNK_SIZE = 25;
       for (let i = 0; i < clamped; i++) {
         if (g.disposed) return; // stopped watching mid-seek
-        g.rv.step();
+        stepGhost(g);
         if (i % CHUNK_SIZE === CHUNK_SIZE - 1) await nextFrame();
       }
       g.gl.consumeSnapshot(g.rv.frame.car);
@@ -796,6 +825,71 @@
       }
     }
   }
+
+  // ---- audio: while a replay is being watched, the game's own car sounds
+  // (engine, tyre/surface noise, landings) are fed from the REPLAY car instead
+  // of the player's. hooks.js calls this for each audio update the game makes
+  // and swaps the arguments for what's returned. Returns undefined when not
+  // watching (nothing is changed). ----
+  function followedFrame() {
+    if (followKey === null) return null;
+    const g = ghosts.get(followKey);
+    if (!g || g.disposed) return null;
+    const frame = g.rv.frame;
+    return frame?.car?.vehicle?.chassis ? frame : null;
+  }
+  // Most common surface among the wheels that are touching the ground, like the game does.
+  function frameMaterial(frame, fallback) {
+    const counts = new Map();
+    for (const w of frame.wheelSurfaceSamples ?? []) {
+      if (!w.grounded || !Number.isInteger(w.surfaceId) || w.surfaceId < 0 || w.surfaceId > 6) continue;
+      counts.set(w.surfaceId, (counts.get(w.surfaceId) ?? 0) + 1);
+    }
+    let best = null;
+    let n = 0;
+    for (const [id, c] of counts) if (c > n) [best, n] = [id, c];
+    return counts.size ? best : fallback;
+  }
+  window.__srv.audioReplace = (kind, arg) => {
+    const frame = followedFrame();
+    if (!frame || !arg) return undefined;
+    const car = frame.car;
+    const chassis = car.vehicle.chassis;
+    const grounded = car.vehicle.raycastVehicle?.groundedWheelCount ?? arg.groundedWheelCount;
+    const held = car.heldControls ?? {};
+    const material = frameMaterial(frame, arg.material);
+    switch (kind) {
+      case "setEngine":
+        return {
+          gear: car.gear,
+          groundedWheelCount: grounded,
+          reverse: !!held.reverse,
+          shiftTimer: car.shiftTimer,
+          speed: car.speed,
+          throttle: !!held.throttle,
+        };
+      case "setSurface": {
+        const q = chassis.quaternion;
+        const n = 1 - 2 * (q.y ** 2 + q.z ** 2);
+        const r = 2 * (q.x * q.z - q.w * q.y);
+        const h = Math.hypot(n, r);
+        const lateralSpeed = h <= 1e-9 ? 0 : Math.abs((chassis.velocity.x * n + chassis.velocity.z * r) / h);
+        const wheels = car.vehicle.raycastVehicle?.wheels ?? [];
+        return {
+          brake: !!held.brake || (!!held.reverse && car.speed > 0.25),
+          groundedWheelCount: grounded,
+          lateralSpeed,
+          material,
+          speed: Math.hypot(chassis.velocity.x, chassis.velocity.z),
+          steeringAngle: wheels.reduce((m, w) => Math.max(m, Math.abs(w.steering ?? 0)), 0),
+        };
+      }
+      case "observeContact":
+        return { groundedWheelCount: grounded, material, verticalSpeed: chassis.velocity.y };
+      default:
+        return undefined;
+    }
+  };
 
   // ---- bridge to the isolated-world content script ----
 

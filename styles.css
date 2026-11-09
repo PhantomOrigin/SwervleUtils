@@ -1231,3 +1231,49 @@ html.srv-hide-all .race-hud {
   font-size: 18px;
   padding: 0;
 }
+
+/* Watching a replay: the game's own speed / checkpoint / timer cards show the
+   player's car, so hide them and let .srv-watch-hud show the replay run's. */
+html.srv-watching .race-hud .hud-card,
+html.srv-watching .race-hud .hud-timer {
+  visibility: hidden !important;
+}
+html.srv-hide-all .srv-watch-hud {
+  visibility: hidden !important;
+}
+.srv-watch-hud {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  display: flex;
+  gap: 8px;
+  z-index: 999997;
+  font-family: sans-serif;
+  pointer-events: none;
+}
+.srv-watch-card {
+  min-width: 82px;
+  padding: 6px 12px;
+  border-radius: 0.45rem;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(8, 31, 36, 0.68);
+  -webkit-backdrop-filter: blur(0.75rem);
+  backdrop-filter: blur(0.75rem);
+  color: #fff8e9;
+  text-align: center;
+}
+.srv-watch-card small {
+  display: block;
+  font-size: 0.54rem;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  color: rgba(255, 248, 233, 0.58);
+}
+.srv-watch-card b {
+  font-size: 1.25rem;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+.srv-watch-timecard {
+  min-width: 118px;
+}
