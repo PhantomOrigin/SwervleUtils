@@ -645,7 +645,7 @@
   }
 
   function setRaceCardValues({ gatesPassed, gateCount, gear, speed }) {
-    raceCardValues.cp = gateCount ? `${gatesPassed}/${gateCount}` : String(gatesPassed ?? 0);
+    raceCardValues.cp = String(gatesPassed ?? 0);
     raceCardValues.gear = gear > 0 ? String(gear) : "-";
     raceCardValues.speed = String(Math.max(0, Math.round(Math.abs(speed ?? 0) * 3.6))); // m/s -> km/h, same as the game
     raceCardsLiveAt = performance.now();
@@ -684,23 +684,45 @@
     timerClone = null;
   }
 
+  // Replacement cards are clones of the game's own (same classes, so the game's
+  // CSS styles and sizes them identically), inserted right beside each
+  // original and given the original's inline style every frame, so they sit
+  // wherever the original does - default or HUD-editor position.
+  const raceCardClones = new Map(); // selector -> { orig, clone }
+
+  function ensureCardClone(sel, prepare) {
+    const orig = document.querySelector(`${sel}:not(.srv-card-clone)`);
+    const entry = raceCardClones.get(sel);
+    if (!orig) {
+      entry?.clone.remove();
+      raceCardClones.delete(sel);
+      return null;
+    }
+    if (entry && entry.orig === orig && entry.clone.isConnected) return entry;
+    entry?.clone.remove();
+    const clone = orig.cloneNode(true);
+    clone.classList.add("srv-card-clone");
+    clone.removeAttribute("data-slot");
+    clone.querySelectorAll("[data-slot]").forEach((n) => n.removeAttribute("data-slot"));
+    prepare(clone);
+    orig.insertAdjacentElement("afterend", clone);
+    const fresh = { orig, clone };
+    raceCardClones.set(sel, fresh);
+    return fresh;
+  }
+
+  function removeRaceCardClones() {
+    for (const { clone } of raceCardClones.values()) clone.remove();
+    raceCardClones.clear();
+  }
+
+  function setCardText(el, text) {
+    if (el && el.textContent !== text) el.textContent = text;
+  }
+
   function buildRaceCards() {
-    if (document.querySelector(".srv-race-card")) return;
-    const make = (cls, html) => {
-      const el = document.createElement("div");
-      el.className = `srv-race-card ${cls}`;
-      el.style.display = "none";
-      window.SwervleSetHtml(el, html);
-      document.body.appendChild(el);
-      return el;
-    };
-    const cpCard = make(
-      "srv-race-card-checkpoint",
-      `<small>CHECKPOINT</small><b class="srv-rc-cp">0</b>`
-    );
-    const speedCard = make("srv-race-card-speed", `<small>SPEED</small><b class="srv-rc-speed">0</b>`);
-    const cpEl = cpCard.querySelector(".srv-rc-cp");
-    const speedEl = speedCard.querySelector(".srv-rc-speed");
+    if (window.__srvRaceCardsBuilt) return;
+    window.__srvRaceCardsBuilt = true;
 
     // Replay telemetry while watching; otherwise the player's own, from the game tick.
     window.SwervleBridge.onTick(({ nextGateIndex, gateCount, gear, speed }) => {
@@ -713,19 +735,9 @@
       updateTimerClone(fmtWatchTime(d.timeMs ?? 0));
     });
 
-    const place = (card, nativeSel) => {
-      const native = document.querySelector(nativeSel);
-      const r = native?.getBoundingClientRect();
-      if (!native || !r || r.width === 0 || r.height === 0 || getComputedStyle(native).display === "none") {
-        card.style.display = "none";
-        return;
-      }
-      card.style.display = "flex";
-      Object.assign(card.style, {
-        left: `${r.left}px`,
-        top: `${r.top}px`,
-        minWidth: `${r.width}px`,
-      });
+    const sync = (entry) => {
+      const css = entry.orig.style.cssText;
+      if (entry.clone.style.cssText !== css) entry.clone.style.cssText = css;
     };
     const tick = () => {
       // Only take over from the game's cards while our own feed is alive, so a
@@ -733,13 +745,25 @@
       const live = performance.now() - raceCardsLiveAt < 3000;
       document.documentElement.classList.toggle("srv-race-cards", live);
       if (live) {
-        place(cpCard, ".checkpoint-card");
-        place(speedCard, ".speed-card");
-        if (cpEl.textContent !== raceCardValues.cp) cpEl.textContent = raceCardValues.cp;
-        if (speedEl.textContent !== raceCardValues.speed) speedEl.textContent = raceCardValues.speed;
+        // Checkpoint only: the game's card also has a GEAR row, which the
+        // extension's own rev bar replaces.
+        const cp = ensureCardClone(".checkpoint-card", (clone) => {
+          clone.querySelectorAll("small").forEach((n, i) => i > 0 && n.remove());
+          clone.querySelectorAll(".telemetry-row").forEach((n, i) => i > 0 && n.remove());
+          clone.querySelectorAll(".progress-track").forEach((n) => n.remove());
+        });
+        if (cp) {
+          sync(cp);
+          setCardText(cp.clone.querySelector("strong"), raceCardValues.cp);
+        }
+        const sp = ensureCardClone(".speed-card", () => {});
+        if (sp) {
+          sync(sp);
+          setCardText(sp.clone.querySelector("strong"), raceCardValues.speed);
+          sp.clone.dataset.digits = String(raceCardValues.speed.length);
+        }
       } else {
-        cpCard.style.display = "none";
-        speedCard.style.display = "none";
+        removeRaceCardClones();
       }
       requestAnimationFrame(tick);
     };

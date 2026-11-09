@@ -1248,49 +1248,16 @@ html.srv-hide-all .race-hud {
    keep their layout, which the replacement cards follow — see buildRaceCards)
    only while the extension's own feed is live. The timer is cloned while
    watching a replay so it can show the replay's time. */
-html.srv-race-cards .race-hud .checkpoint-card,
-html.srv-race-cards .race-hud .speed-card,
-html.srv-race-cards .checkpoint-card.hud-card,
-html.srv-race-cards .speed-card.hud-card {
+html.srv-race-cards .race-hud .checkpoint-card:not(.srv-card-clone),
+html.srv-race-cards .race-hud .speed-card:not(.srv-card-clone),
+html.srv-race-cards .checkpoint-card.hud-card:not(.srv-card-clone),
+html.srv-race-cards .speed-card.hud-card:not(.srv-card-clone) {
   visibility: hidden !important;
 }
 html.srv-watching .hud-timer:not(.srv-timer-clone) {
   visibility: hidden !important;
 }
-html.srv-hide-all .srv-race-card,
+html.srv-hide-all .srv-card-clone,
 html.srv-hide-all .srv-timer-clone {
   visibility: hidden !important;
-}
-.srv-race-card {
-  position: fixed;
-  z-index: 999997;
-  box-sizing: border-box;
-  flex-direction: column;
-  justify-content: center;
-  gap: 1px;
-  padding: 6px 12px;
-  border-radius: 0.45rem;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: rgba(8, 31, 36, 0.68);
-  -webkit-backdrop-filter: blur(0.75rem);
-  backdrop-filter: blur(0.75rem);
-  color: #fff8e9;
-  font-family: sans-serif;
-  pointer-events: none;
-}
-.srv-race-card small {
-  display: block;
-  font-size: 0.54rem;
-  font-weight: 900;
-  letter-spacing: 0.16em;
-  color: rgba(255, 248, 233, 0.58);
-}
-.srv-race-card b {
-  font-size: 1.25rem;
-  font-weight: 900;
-  font-variant-numeric: tabular-nums;
-  line-height: 1.1;
-}
-.srv-race-card small + b + small {
-  margin-top: 3px;
 }
