@@ -118,3 +118,7 @@ Separately, the moment the site's own post-race result screen appears, if your r
 - `splits.js` — live split/checkpoint tracker panel.
 - `content.js` — leaderboard box, buttons, watch/race orchestration, Swervle Utils settings menu + HUD editor.
 - `styles.css` — all injected UI styling.
+
+## License
+
+MIT, see [LICENSE](LICENSE).
