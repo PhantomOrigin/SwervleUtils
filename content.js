@@ -696,11 +696,10 @@
     };
     const cpCard = make(
       "srv-race-card-checkpoint",
-      `<small>CHECKPOINT</small><b class="srv-rc-cp">0</b><small>GEAR</small><b class="srv-rc-gear">1</b>`
+      `<small>CHECKPOINT</small><b class="srv-rc-cp">0</b>`
     );
     const speedCard = make("srv-race-card-speed", `<small>SPEED</small><b class="srv-rc-speed">0</b>`);
     const cpEl = cpCard.querySelector(".srv-rc-cp");
-    const gearEl = cpCard.querySelector(".srv-rc-gear");
     const speedEl = speedCard.querySelector(".srv-rc-speed");
 
     // Replay telemetry while watching; otherwise the player's own, from the game tick.
@@ -726,7 +725,6 @@
         left: `${r.left}px`,
         top: `${r.top}px`,
         minWidth: `${r.width}px`,
-        minHeight: `${r.height}px`,
       });
     };
     const tick = () => {
@@ -738,7 +736,6 @@
         place(cpCard, ".checkpoint-card");
         place(speedCard, ".speed-card");
         if (cpEl.textContent !== raceCardValues.cp) cpEl.textContent = raceCardValues.cp;
-        if (gearEl.textContent !== raceCardValues.gear) gearEl.textContent = raceCardValues.gear;
         if (speedEl.textContent !== raceCardValues.speed) speedEl.textContent = raceCardValues.speed;
       } else {
         cpCard.style.display = "none";
