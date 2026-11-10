@@ -552,6 +552,7 @@
   // perfectly smooth: the camera **is** the viewer's frame of reference,
   // so a jumpy camera reads as jumpy everything, including a smoothly
   // moving object inside it.
+  const chaseCam = { yaw: null, last: 0 }; // reset whenever the followed ghost changes
   function followCameraOnGhost(camera, ghost, alpha) {
     const chassis = ghost.rv.frame.car.vehicle.chassis;
     const pos = {
@@ -560,9 +561,28 @@
       z: lerp(chassis.previousPosition.z, chassis.position.z, alpha),
     };
     const quat = nlerpQuat(chassis.previousQuaternion, chassis.quaternion, alpha);
-    // Chase-cam offset: behind and above the ghost, in its own local space.
-    const offset = rotateByQuaternion({ x: 0, y: 3.2, z: -7.5 }, quat);
-    camera.position.set(pos.x + offset.x, pos.y + offset.y, pos.z + offset.z);
+    // Chase cam: sits behind the direction the car is actually TRAVELLING, not
+    // the way it's facing, so a car driving backwards is seen from its front
+    // (and a spin or drift doesn't whip the view around). The heading eases
+    // toward the travel direction, and holds when the car is nearly stopped.
+    const now = performance.now();
+    const dt = Math.min(0.1, Math.max(0, (now - chaseCam.last) / 1000));
+    chaseCam.last = now;
+    const vx = (chassis.position.x - chassis.previousPosition.x) * TICK_RATE;
+    const vz = (chassis.position.z - chassis.previousPosition.z) * TICK_RATE;
+    if (chaseCam.yaw === null) {
+      const f = rotateByQuaternion({ x: 0, y: 0, z: 1 }, quat);
+      chaseCam.yaw = Math.atan2(f.x, f.z);
+    }
+    if (Math.hypot(vx, vz) > 1.5) {
+      const target = Math.atan2(vx, vz);
+      let diff = target - chaseCam.yaw;
+      diff = Math.atan2(Math.sin(diff), Math.cos(diff)); // shortest way round
+      chaseCam.yaw += diff * (1 - Math.exp(-dt * 5));
+    }
+    const dx = Math.sin(chaseCam.yaw);
+    const dz = Math.cos(chaseCam.yaw);
+    camera.position.set(pos.x - dx * 7.5, pos.y + 3.2, pos.z - dz * 7.5);
     camera.lookAt(pos.x, pos.y + 1, pos.z);
   }
 
@@ -941,6 +961,7 @@
       if (prev) prev.manual = null;
     }
     followKey = newKey;
+    chaseCam.yaw = null;
     if (followKey !== null) {
       const g = ghosts.get(followKey);
       if (g) g.manual = { speed: 1, accumTicks: 0, lastTimestamp: null };
