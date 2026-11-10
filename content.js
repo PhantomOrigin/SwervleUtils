@@ -663,16 +663,9 @@
       timerClone.classList.add("srv-timer-clone");
       orig.insertAdjacentElement("afterend", timerClone);
     }
-    const r = orig.getBoundingClientRect();
-    Object.assign(timerClone.style, {
-      position: "fixed",
-      left: `${r.left}px`,
-      top: `${r.top}px`,
-      width: `${r.width}px`,
-      height: `${r.height}px`,
-      margin: "0",
-      transform: "none",
-    });
+    // Same parent and classes as the original, so the game's own CSS places it
+    // (including at any viewport size / fullscreen); just mirror its inline style.
+    if (timerClone.style.cssText !== orig.style.cssText) timerClone.style.cssText = orig.style.cssText;
     // The text lives in one element somewhere inside; find it by its content.
     const holder = [timerClone, ...timerClone.querySelectorAll("*")].find(
       (el) => el.children.length === 0 && /\d:\d\d\.\d{2,3}/.test(el.textContent)
