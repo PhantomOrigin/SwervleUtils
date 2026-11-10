@@ -1710,6 +1710,8 @@
     { key: "srv-hide-watch-controls", label: "Watch controls (input keys, scrub bar, stop-watching bar)" },
     { key: "srv-hide-own-input-hud", label: "Live input keys (your own driving)" },
     { key: "srv-hide-gear-hud", label: "Gear shift HUD" },
+    // Cosmetic sky clouds, drawn by srv-main.js (it just watches for this class on <html>).
+    { key: "srv-hide-clouds", label: "Sky clouds" },
     // The yellow outline the site draws around the game canvas when it has
     // keyboard focus (i.e. right after it grabs your mouse) — see styles.css.
     { key: "srv-hide-focus-border", label: "Yellow border around the game when focused" },
