@@ -392,14 +392,16 @@
   }
 
   // ===================================================================
-  // Sky clouds: a ring of simple white low-poly clouds high above the track.
-  // Purely cosmetic - added to the scene's own graph, never touched by the
-  // physics. The game's 3D classes aren't imported anywhere we can reach, so
-  // they're borrowed from objects already in the scene (an existing mesh's
-  // constructors), the same way ghost views do it. Toggled live with the
-  // `srv-hide-clouds` class that the settings menu puts on <html>.
+  // Sky clouds: a big dome around the camera whose surface is a procedural
+  // cloud layer (noise in a shader), seen in perspective so the clouds shrink
+  // and bunch up toward the horizon, and slowly scroll. Drawn over the game's
+  // own sky and behind everything else (depth-tested), so terrain and cars
+  // cover it. Purely cosmetic. The game's 3D classes aren't imported anywhere
+  // we can reach, so they're borrowed from an object already in the scene (an
+  // existing mesh's constructors), like ghost views do. Toggled live with the
+  // `srv-hide-clouds` class the settings menu puts on <html>.
   // ===================================================================
-  const clouds = { vp: null, group: null, items: [], tries: 0, last: 0, y: null, failed: false, material: null };
+  const clouds = { vp: null, mesh: null, material: null, uniforms: null, tries: 0, start: 0, failed: false };
 
   function findSceneClasses(root) {
     let found = null;
@@ -407,13 +409,13 @@
       if (found || !o.isMesh || Array.isArray(o.material) || !o.geometry?.attributes?.position) return;
       const m = o.material;
       if (!(m.isMeshStandardMaterial || m.isMeshLambertMaterial || m.isMeshPhongMaterial || m.isMeshBasicMaterial || m.isMeshToonMaterial)) return;
-      found = { Mesh: o.constructor, Material: m.constructor, Geometry: o.geometry.constructor, Attribute: o.geometry.attributes.position.constructor, Group: root.constructor };
+      found = { Mesh: o.constructor, Material: m.constructor, Geometry: o.geometry.constructor, Attribute: o.geometry.attributes.position.constructor };
     });
     return found;
   }
 
-  // Low-poly sphere (icosahedron, subdivided once): [x,y,z] triangles.
-  function icoTriangles() {
+  // Low-poly unit sphere (icosahedron, subdivided once) as a flat position array.
+  function domePositions() {
     const t = (1 + Math.sqrt(5)) / 2;
     const raw = [[-1, t, 0], [1, t, 0], [-1, -t, 0], [1, -t, 0], [0, -1, t], [0, 1, t], [0, -1, -t], [0, 1, -t], [t, 0, -1], [t, 0, 1], [-t, 0, -1], [-t, 0, 1]];
     const norm = (v) => { const l = Math.hypot(...v); return [v[0] / l, v[1] / l, v[2] / l]; };
@@ -424,41 +426,57 @@
     for (const [i, j, k] of F) {
       const a = V[i], b = V[j], c = V[k];
       const ab = mid(a, b), bc = mid(b, c), ca = mid(c, a);
-      out.push([a, ab, ca], [b, bc, ab], [c, ca, bc], [ab, bc, ca]);
+      for (const tri of [[a, ab, ca], [b, bc, ab], [c, ca, bc], [ab, bc, ca]]) for (const v of tri) out.push(v[0], v[1], v[2]);
     }
-    return out;
+    return new Float32Array(out);
   }
 
-  // One cloud = several squashed, flat-bottomed puffs merged into one mesh.
-  function buildCloudPositions(rand) {
-    const tris = icoTriangles();
-    const puffs = 4 + Math.floor(rand() * 3);
-    const pos = [];
-    for (let p = 0; p < puffs; p++) {
-      const k = p / (puffs - 1) - 0.5; // -0.5..0.5 along the cloud
-      const size = (1 - Math.abs(k) * 1.1) * (0.8 + rand() * 0.4);
-      const ox = k * 3.2 + (rand() - 0.5) * 0.4;
-      const oz = (rand() - 0.5) * 0.9;
-      const oy = size * 0.15;
-      for (const tri of tris) {
-        for (const v of tri) {
-          const y = Math.max(v[1], -0.25) * 0.6;
-          pos.push(ox + v[0] * size * 1.25, oy + y * size, oz + v[2] * size);
-        }
-      }
+  const CLOUD_VERT_DECL = "varying vec3 vSkyDir;\n";
+  const CLOUD_FRAG_DECL = `
+    varying vec3 vSkyDir;
+    uniform float uTime;
+    uniform vec3 uFog;
+    float srvHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+    float srvNoise(vec2 p) {
+      vec2 i = floor(p), f = fract(p);
+      f = f * f * (3.0 - 2.0 * f);
+      return mix(mix(srvHash(i), srvHash(i + vec2(1.0, 0.0)), f.x), mix(srvHash(i + vec2(0.0, 1.0)), srvHash(i + vec2(1.0, 1.0)), f.x), f.y);
     }
-    return new Float32Array(pos);
-  }
+    float srvFbm(vec2 p) {
+      float v = 0.0, a = 0.5;
+      for (int i = 0; i < 5; i++) { v += a * srvNoise(p); p = p * 2.03 + vec2(17.0, 9.0); a *= 0.5; }
+      return v;
+    }
+  `;
+  const CLOUD_FRAG_MAIN = `
+    {
+      vec3 d = normalize(vSkyDir);
+      if (d.y <= 0.0) discard;
+      // Project the view direction onto a flat cloud layer: perspective makes
+      // the clouds shrink and crowd together toward the horizon.
+      vec2 uv = d.xz / (d.y + 0.07) * 1.1 + vec2(uTime * 0.010, uTime * 0.004);
+      float c = srvFbm(uv);
+      float cover = smoothstep(0.43, 0.68, c);
+      float shade = srvFbm(uv + vec2(0.05, 0.10));
+      float lit = clamp(0.55 + (c - shade) * 3.5, 0.0, 1.0);
+      vec3 col = mix(vec3(0.74, 0.80, 0.90), vec3(1.0), lit);
+      float fade = smoothstep(0.0, 0.2, d.y);
+      col = mix(uFog, col, fade);
+      float a = cover * smoothstep(0.0, 0.1, d.y) * 0.95;
+      if (a < 0.01) discard;
+      gl_FragColor = vec4(col, a);
+    }
+  `;
 
   function disposeClouds() {
-    if (clouds.group) {
-      clouds.group.removeFromParent();
-      for (const it of clouds.items) it.mesh.geometry.dispose?.();
+    if (clouds.mesh) {
+      clouds.mesh.removeFromParent();
+      clouds.mesh.geometry.dispose?.();
       clouds.material?.dispose?.();
     }
-    clouds.group = null;
-    clouds.items = [];
+    clouds.mesh = null;
     clouds.material = null;
+    clouds.uniforms = null;
     clouds.vp = null;
   }
 
@@ -467,52 +485,50 @@
     if (!cls) return false;
     let top = vp;
     while (top.parent) top = top.parent;
-    const group = new cls.Group();
-    group.name = "swervle-utils-clouds";
-    const mat = new cls.Material();
-    const set = (k, v) => { if (k in mat) mat[k] = v; };
-    if (mat.color?.set) mat.color.set(0xffffff);
-    if (mat.emissive?.set) mat.emissive.set(0xdfeaff);
-    set("emissiveIntensity", 0.65);
-    set("flatShading", true);
-    set("roughness", 1);
-    set("metalness", 0);
-    set("fog", false);
-    set("transparent", false);
-    set("depthWrite", true);
-    mat.needsUpdate = true;
-    clouds.material = mat;
 
-    // Seeded so the sky looks the same every race.
-    let seed = 20240607;
-    const rand = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
-    const far = camera?.far > 0 ? camera.far : 1000;
-    const maxR = Math.min(far * 0.8, 900);
-    const COUNT = 26;
-    for (let i = 0; i < COUNT; i++) {
-      const geo = new cls.Geometry();
-      for (const name of Object.keys(geo.attributes ?? {})) geo.deleteAttribute(name);
-      geo.setIndex(null);
-      geo.setAttribute("position", new cls.Attribute(buildCloudPositions(rand), 3));
-      geo.computeVertexNormals();
-      const mesh = new cls.Mesh(geo, mat);
-      mesh.castShadow = false;
-      mesh.receiveShadow = false;
-      mesh.frustumCulled = false;
-      const scale = maxR * 0.045 * (0.7 + rand() * 0.8);
-      mesh.scale.set(scale, scale, scale);
-      mesh.rotation.y = rand() * Math.PI * 2;
-      group.add(mesh);
-      clouds.items.push({
-        mesh,
-        angle: (i / COUNT) * Math.PI * 2 + rand() * 0.5,
-        radius: maxR * (0.3 + rand() * 0.7),
-        height: maxR * (0.1 + rand() * 0.14),
-      });
-    }
-    top.add(group);
-    clouds.group = group;
+    const uniforms = { uTime: { value: 0 }, uFog: { value: { r: 0.72, g: 0.82, b: 0.93 } } };
+    const fog = top.fog?.color;
+    const mat = new cls.Material();
+    if ("fog" in mat) mat.fog = false;
+    mat.side = 2; // DoubleSide: winding doesn't matter, it's seen from inside
+    mat.transparent = true;
+    mat.depthWrite = false;
+    mat.depthTest = true;
+    mat.onBeforeCompile = (shader) => {
+      shader.uniforms.uTime = uniforms.uTime;
+      shader.uniforms.uFog = uniforms.uFog;
+      shader.vertexShader = CLOUD_VERT_DECL + shader.vertexShader.replace("#include <begin_vertex>", "#include <begin_vertex>\n  vSkyDir = position;");
+      shader.fragmentShader = CLOUD_FRAG_DECL + shader.fragmentShader.replace("#include <dithering_fragment>", "#include <dithering_fragment>\n" + CLOUD_FRAG_MAIN);
+      if (!shader.fragmentShader.includes("srvFbm(uv)") || !shader.vertexShader.includes("vSkyDir = position")) {
+        // This material type doesn't have the chunks we hook into: draw nothing rather than a white dome.
+        clouds.failed = true;
+        if (clouds.mesh) clouds.mesh.visible = false;
+        console.error("[Swervle Replay Viewer] clouds disabled: unsupported material");
+      }
+    };
+    mat.customProgramCacheKey = () => "swervle-utils-clouds";
+    mat.needsUpdate = true;
+
+    const geo = new cls.Geometry();
+    for (const name of Object.keys(geo.attributes ?? {})) geo.deleteAttribute(name);
+    geo.setIndex(null);
+    geo.setAttribute("position", new cls.Attribute(domePositions(), 3));
+    const mesh = new cls.Mesh(geo, mat);
+    mesh.name = "swervle-utils-clouds";
+    mesh.frustumCulled = false;
+    mesh.castShadow = false;
+    mesh.receiveShadow = false;
+    mesh.renderOrder = -10000; // first among transparent objects, so cars/ghosts blend over it
+    top.add(mesh);
+
+    clouds.mesh = mesh;
+    clouds.material = mat;
+    clouds.uniforms = uniforms;
     clouds.vp = vp;
+    clouds.start = performance.now();
+    if (fog && "r" in fog) {
+      uniforms.uFog.value = { r: fog.r, g: fog.g, b: fog.b };
+    }
     return true;
   }
 
@@ -522,22 +538,18 @@
       const vp = window.__srv.ready?.viewParent;
       if (!vp || !camera) return;
       const hidden = document.documentElement.classList.contains("srv-hide-clouds");
-      if (clouds.group && clouds.vp !== vp) disposeClouds(); // a new race scene
-      if (!clouds.group) {
-        if (hidden || (clouds.tries++ % 30 !== 0)) return; // retry every ~30 frames until the scene has a mesh to borrow from
+      if (clouds.mesh && clouds.vp !== vp) disposeClouds(); // a new race scene
+      if (!clouds.mesh) {
+        if (hidden || clouds.tries++ % 30 !== 0) return; // retry every ~30 frames until the scene has a mesh to borrow from
         if (!buildClouds(vp, camera)) return;
       }
-      clouds.group.visible = !hidden;
+      clouds.mesh.visible = !hidden;
       if (hidden) return;
-      const dt = Math.min(0.1, Math.max(0, (now - clouds.last) / 1000));
-      clouds.last = now;
-      const p = camera.position;
-      clouds.y = clouds.y === null ? p.y : clouds.y + (p.y - clouds.y) * Math.min(1, dt * 0.6);
-      clouds.group.position.set(p.x, clouds.y, p.z);
-      for (const it of clouds.items) {
-        it.angle += dt * 0.004; // slow drift
-        it.mesh.position.set(Math.cos(it.angle) * it.radius, it.height, Math.sin(it.angle) * it.radius);
-      }
+      const far = camera.far > 0 ? camera.far : 1000;
+      const r = Math.max(50, far * 0.9);
+      clouds.mesh.scale.set(r, r, r);
+      clouds.mesh.position.set(camera.position.x, camera.position.y, camera.position.z);
+      clouds.uniforms.uTime.value = (now - clouds.start) / 1000;
     } catch (err) {
       clouds.failed = true;
       console.error("[Swervle Replay Viewer] clouds disabled", err);
