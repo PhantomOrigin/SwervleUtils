@@ -52,13 +52,13 @@
     // key twice is a no-op on the srv-main.js side, so callers don't need
     // to track whether a ghost is already up before asking to show it.
     // { key, error? }
-    spawnGhost: (key, states, displayName, livery) =>
-      request("srv:spawnGhost", { key, states, displayName, livery }, "srv:spawnGhostResult"),
+    spawnGhost: (key, states, displayName, livery, replayMode) =>
+      request("srv:spawnGhost", { key, states, displayName, livery, replayMode }, "srv:spawnGhostResult"),
     despawnGhost: (key) => document.dispatchEvent(new CustomEvent("srv:despawnGhost", { detail: toPage({ key }) })),
     setCameraFollow: (key) =>
       document.dispatchEvent(new CustomEvent("srv:setCameraFollow", { detail: toPage({ key }) })),
     // { gates: [{gateIndex,tick,speed}], totalTicks, error? }
-    computeSplits: (states) => request("srv:computeSplits", { states }, "srv:splitsResult"),
+    computeSplits: (states, replayMode) => request("srv:computeSplits", { states, replayMode }, "srv:splitsResult"),
     // Playback speed multiplier for the currently-followed ghost only (see
     // srv-main.js's "manual" ghost mode) — a no-op if `key` isn't the
     // followed ghost. Fire-and-forget: there's nothing to await, the next

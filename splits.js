@@ -249,7 +249,7 @@
     try {
       const ghost = await window.SwervleAPI.getGhost(pbRunId);
       const states = window.SwervleDecoder.decodeStatesBase64(ghost.statesBase64);
-      const result = await window.SwervleBridge.computeSplits(states);
+      const result = await window.SwervleBridge.computeSplits(states, ghost.replayMode ?? null);
       if (result.error) throw new Error(result.error);
       if (!result.gates?.length) throw new Error("no checkpoints reported");
       pbGates = result.gates;

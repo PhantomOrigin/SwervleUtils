@@ -177,6 +177,7 @@
     if (!hooks.available) return false;
 
     let bytes, displayName, livery = info.livery ?? null;
+    let replayMode = info.replayMode ?? null; // "camera-probe-v1" runs need the sim's raycast emulation
     if (info.localBytes) {
       bytes = info.localBytes;
       displayName = info.displayName;
@@ -188,8 +189,9 @@
       // gridSignature, revision}); without passing it on, every ghost
       // falls back to a flat random colour.
       if (ghost.livery && typeof ghost.livery.design === "string") livery = ghost.livery;
+      replayMode = ghost.replayMode ?? replayMode;
     }
-    const result = await window.SwervleBridge.spawnGhost(info.publicRunId, bytes, displayName, livery);
+    const result = await window.SwervleBridge.spawnGhost(info.publicRunId, bytes, displayName, livery, replayMode);
     if (result.error) throw new Error(result.error);
 
     // Kept alongside the ghost (not just returned) so watchReplay can read
@@ -197,7 +199,7 @@
     // this run was already visible (in which case none of the fetch/decode
     // work above ran this time) — the input-analysis panel needs the raw
     // bytes either way.
-    visibleGhosts.set(info.publicRunId, { displayName, bytes });
+    visibleGhosts.set(info.publicRunId, { displayName, bytes, replayMode });
     refreshRowButtonStates();
     return true;
   }
@@ -588,7 +590,7 @@
   // wrong run's data.
   let analysisGeneration = 0;
 
-  async function showInputAnalysis(bytes) {
+  async function showInputAnalysis(bytes, replayMode = null) {
     if (!bytes) return;
     const generation = ++analysisGeneration;
     const panel = document.querySelector(".srv-input-analysis") || buildInputAnalysisPanel();
@@ -599,7 +601,7 @@
 
     if (analysis.recoveryPressTicks.length > 0) {
       try {
-        const result = await window.SwervleBridge.computeSplits(bytes);
+        const result = await window.SwervleBridge.computeSplits(bytes, replayMode);
         if (generation !== analysisGeneration) return; // a newer watch/hide superseded this one
         if (!result.error) window.SwervleSetHtml(body, renderInputAnalysisBody(analysis, result.gates));
       } catch (err) {
@@ -891,7 +893,7 @@
         setWatchingUi(true);
         window.SwervleBridge.setCameraFollow(info.publicRunId);
         showActiveGhostBar(`Spectating ${info.displayName}'s replay (not your run)`);
-        showInputAnalysis(visibleGhosts.get(info.publicRunId)?.bytes);
+        showInputAnalysis(visibleGhosts.get(info.publicRunId)?.bytes, visibleGhosts.get(info.publicRunId)?.replayMode);
       } else if (info.localBytes) {
         window.SwervleViewer.open({ displayName: info.displayName, publicRunId: info.publicRunId, bytes: info.localBytes });
         showToast("In-game hooks unavailable — showing the standalone replay viewer instead.");

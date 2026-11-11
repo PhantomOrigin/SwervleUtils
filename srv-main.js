@@ -833,7 +833,7 @@
     }
   }
 
-  async function spawnGhostOnce(key, states, displayName, livery) {
+  async function spawnGhostOnce(key, states, displayName, livery, replayMode) {
     // Temporary diagnostic — trying to pin down a report of 2-4 duplicate
     // cars for a single ghost, immediately on first watch. If this logs
     // more than once for the same key without a despawn in between, the
@@ -846,7 +846,7 @@
     const ready = window.__srv.ready;
     if (!ready) throw new Error("Live hooks unavailable (the race isn't ready yet)");
 
-    const rv = new ready.RV({ modifiers: ready.modifiers, states, track: ready.track, capturePresentationData: true });
+    const rv = new ready.RV({ modifiers: ready.modifiers, states, track: ready.track, capturePresentationData: true, presentationRaycastEmulation: replayMode === "camera-probe-v1" });
     const initial = rv.create();
     let carView, gl, liveryHandle;
     try {
@@ -896,12 +896,12 @@
     console.log(`[Swervle Replay Viewer] spawnGhostOnce ADDED key=${key} ghosts.size=${ghosts.size} carView.root.uuid=${carView.root.uuid} viewParent.children.length=${ready.viewParent.children.length}`);
   }
 
-  async function spawnGhost(key, states, displayName, livery) {
+  async function spawnGhost(key, states, displayName, livery, replayMode) {
     console.log(`[Swervle Replay Viewer] spawnGhost CALLED key=${key} ghosts.has=${ghosts.has(key)} pendingSpawns.has=${pendingSpawns.has(key)}`);
     if (ghosts.has(key)) return; // already visible — nothing to do
     let promise = pendingSpawns.get(key);
     if (!promise) {
-      promise = spawnGhostOnce(key, states, displayName, livery).finally(() => pendingSpawns.delete(key));
+      promise = spawnGhostOnce(key, states, displayName, livery, replayMode).finally(() => pendingSpawns.delete(key));
       pendingSpawns.set(key, promise);
     }
     return promise;
@@ -956,13 +956,13 @@
   function nextFrame() {
     return new Promise((resolve) => requestAnimationFrame(resolve));
   }
-  async function computeSplits(states) {
+  async function computeSplits(states, replayMode) {
     const ready = window.__srv.ready;
     if (!ready) throw new Error("Live hooks unavailable");
     // capturePresentationData makes each frame carry the race events the
     // simulation produced that tick (checkpoints, finish with its exact time).
     // frame.tick counts from the race start, like the live timer.
-    const rv = new ready.RV({ modifiers: ready.modifiers, states, track: ready.track, capturePresentationData: true });
+    const rv = new ready.RV({ modifiers: ready.modifiers, states, track: ready.track, capturePresentationData: true, presentationRaycastEmulation: replayMode === "camera-probe-v1" });
     rv.create();
     await nextFrame(); // rv.create() itself can be non-trivial work — paint before stepping starts
     const gates = [];
@@ -1105,9 +1105,9 @@
   });
 
   document.addEventListener("srv:spawnGhost", async (e) => {
-    const { requestId, key, states, displayName, livery } = e.detail || {};
+    const { requestId, key, states, displayName, livery, replayMode } = e.detail || {};
     try {
-      await spawnGhost(key, states, displayName, livery);
+      await spawnGhost(key, states, displayName, livery, replayMode);
       dispatch("srv:spawnGhostResult", { requestId, key });
     } catch (err) {
       dispatch("srv:spawnGhostResult", { requestId, key, error: String(err?.message || err) });
@@ -1174,9 +1174,9 @@
   });
 
   document.addEventListener("srv:computeSplits", async (e) => {
-    const { requestId, states } = e.detail || {};
+    const { requestId, states, replayMode } = e.detail || {};
     try {
-      const result = await computeSplits(states);
+      const result = await computeSplits(states, replayMode);
       dispatch("srv:splitsResult", { requestId, ...result });
     } catch (err) {
       dispatch("srv:splitsResult", { requestId, error: String(err?.message || err) });
