@@ -16,6 +16,8 @@
   let trackKey = null;
   let panel = null;
   let scope = "track"; // "track" | "all"
+  let period = localStorage.getItem("srv-grind-period") === "session" ? "session" : "all-time";
+  let session = { tracks: {} }; // same shape as `data`, but only since this page was loaded (never saved)
   let lastPhase = null;
   let lastTick = -1;
   let saveTimer = null;
@@ -83,17 +85,23 @@
     if (!trackKey) return null;
     return (data.tracks[trackKey] ??= { attempts: 0, finished: 0, timeMs: 0, lastPlayed: 0 });
   }
+  function currentSession() {
+    return (session.tracks[trackKey] ??= { attempts: 0, finished: 0, timeMs: 0 });
+  }
 
   // ---- telemetry ----
   function onTick({ phase, tick }) {
     if (!loaded || !trackKey) return;
     const t = current();
+    const sess = currentSession();
     if (phase === "racing" && lastPhase !== "racing") {
       t.attempts++;
+      sess.attempts++;
       t.lastPlayed = Date.now();
       scheduleSave();
     } else if (phase === "finished" && lastPhase === "racing") {
       t.finished++;
+      sess.finished++;
       t.lastPlayed = Date.now();
       scheduleSave();
     }
@@ -101,6 +109,7 @@
       const dt = tick - lastTick;
       if (dt > 0 && dt <= 10) {
         t.timeMs += dt * TICK_MS;
+        sess.timeMs += dt * TICK_MS;
         scheduleSave();
       }
     }
@@ -110,7 +119,7 @@
 
   // ---- UI ----
   function fmtDuration(ms) {
-    const total = Math.floor(ms / 1000);
+    const total = Math.round(ms / 1000);
     const h = Math.floor(total / 3600);
     const m = Math.floor((total % 3600) / 60);
     const s = total % 60;
@@ -118,9 +127,10 @@
   }
 
   function totals() {
-    if (scope === "track") return current() ?? { attempts: 0, finished: 0, timeMs: 0 };
+    const source = period === "session" ? session : data;
+    if (scope === "track") return source.tracks[trackKey] ?? { attempts: 0, finished: 0, timeMs: 0 };
     const sum = { attempts: 0, finished: 0, timeMs: 0, tracks: 0 };
-    for (const t of Object.values(data.tracks)) {
+    for (const t of Object.values(source.tracks)) {
       if (!t.attempts && !t.timeMs) continue;
       sum.attempts += t.attempts;
       sum.finished += t.finished;
@@ -142,6 +152,7 @@
     panel.querySelector(".srv-grind-finished").textContent = t.attempts > 0 ? `${t.finished} (${rate}%)` : "0";
     panel.querySelector(".srv-grind-time").textContent = fmtDuration(t.timeMs);
     panel.querySelector(".srv-grind-scope").textContent = scope === "track" ? "This track" : "All tracks";
+    panel.querySelector(".srv-grind-period").textContent = period === "session" ? "Session" : "All time";
     panel.querySelector(".srv-grind-sub").textContent = scope === "track" ? trackKey : `${t.tracks ?? 0} tracks`;
   }
 
@@ -153,7 +164,10 @@
     window.SwervleSetHtml(panel, `
       <div class="srv-grind-head">
         <span class="srv-grind-title">Grind stats</span>
-        <button type="button" class="srv-grind-scope" title="Switch between this track and all tracks">This track</button>
+        <span class="srv-grind-toggles">
+          <button type="button" class="srv-grind-period" title="Switch between this session (since you loaded the page) and all time">All time</button>
+          <button type="button" class="srv-grind-scope" title="Switch between this track and all tracks">This track</button>
+        </span>
       </div>
       <div class="srv-grind-row"><span>Attempts</span><b class="srv-grind-attempts">0</b></div>
       <div class="srv-grind-row"><span>Finished</span><b class="srv-grind-finished">0</b></div>
@@ -164,16 +178,35 @@
       </div>
     `);
     document.body.appendChild(panel);
+    panel.querySelector(".srv-grind-period").addEventListener("click", () => {
+      period = period === "session" ? "all-time" : "session";
+      try {
+        localStorage.setItem("srv-grind-period", period);
+      } catch {}
+      render();
+    });
     panel.querySelector(".srv-grind-scope").addEventListener("click", () => {
       scope = scope === "track" ? "all" : "track";
       render();
     });
     panel.querySelector(".srv-grind-reset").addEventListener("click", () => {
-      const what = scope === "track" ? `the stats for ${trackKey}` : "ALL grind stats on every track";
-      if (!window.confirm(`Reset ${what}? This can't be undone.`)) return;
-      if (scope === "track") delete data.tracks[trackKey];
-      else data = { tracks: {} };
-      scheduleSave();
+      const what = scope === "track" ? `the stats for ${trackKey}` : "the stats for every track";
+      const which = period === "session" ? "session" : "all-time";
+      if (!window.confirm(`Reset ${which} ${what}?${period === "session" ? "" : " This can't be undone."}`)) return;
+      if (period === "session") {
+        if (scope === "track") delete session.tracks[trackKey];
+        else session = { tracks: {} };
+      } else {
+        // All-time reset clears the session numbers too, so the two never disagree.
+        if (scope === "track") {
+          delete data.tracks[trackKey];
+          delete session.tracks[trackKey];
+        } else {
+          data = { tracks: {} };
+          session = { tracks: {} };
+        }
+        scheduleSave();
+      }
       render();
     });
     setInterval(render, 1000);

@@ -1340,6 +1340,11 @@ html.srv-hide-all .srv-timer-clone {
   font-size: 10px;
   color: #8a93a6;
 }
+.srv-grind-toggles {
+  display: flex;
+  gap: 4px;
+}
+.srv-grind-period,
 .srv-grind-scope,
 .srv-grind-reset {
   background: rgba(90, 200, 255, 0.12);
