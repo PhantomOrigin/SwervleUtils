@@ -459,9 +459,9 @@
       float cover = smoothstep(0.43, 0.68, c);
       float shade = srvFbm(uv + vec2(0.05, 0.10));
       float lit = clamp(0.55 + (c - shade) * 3.5, 0.0, 1.0);
-      vec3 cloudCol = mix(vec3(0.76, 0.82, 0.92), vec3(1.0), lit);
+      vec3 cloudCol = mix(vec3(0.82, 0.88, 0.97), vec3(1.0), lit);
       // Blue sky: pale haze at the horizon deepening to a clear blue overhead.
-      vec3 sky = mix(vec3(0.66, 0.82, 0.97), vec3(0.14, 0.42, 0.92), pow(clamp(d.y, 0.0, 1.0), 0.45));
+      vec3 sky = mix(vec3(0.46, 0.70, 0.96), vec3(0.04, 0.28, 0.86), pow(clamp(d.y, 0.0, 1.0), 0.4));
       float fade = smoothstep(0.0, 0.2, d.y);
       vec3 col = mix(sky, cloudCol, cover * 0.97);
       col = mix(uFog, col, fade);
