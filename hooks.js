@@ -178,7 +178,7 @@
     let m = text.match(/new ([\w$]+)\(\{modifiers:this\.#[\w$]+,presentationRaycastEmulation:/);
     n.RV = m?.[1] ?? null;
     m = text.match(
-      /new ([\w$]+)\(\{appearance:([\w$]+),assetInstance:await this\.#[\w$]+\.instantiate\(([\w$]+)\),definition:([\w$]+),entityId:[^,]+,materialColorOverrides:([\w$]+),materialRegistrar:this\.#[\w$]+\.materialRegistrar\}\)/
+      /new ([\w$]+)\(\{appearance:([\w$]+),assetInstance:(?:await )?(?:this\.#)?[\w$]+\.instantiate\(([\w$]+)\),definition:([\w$]+),entityId:[^,]+,materialColorOverrides:([\w$]+),materialRegistrar:(?:this\.#)?[\w$]+\.materialRegistrar\}\)/
     );
     n.VD = m?.[1] ?? null;
     n.appearance = m?.[2] ?? null;
