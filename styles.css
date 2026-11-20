@@ -1295,18 +1295,18 @@ html.srv-hide-all .srv-timer-clone {
   background-color: rgba(255, 255, 255, 0.15);
 }
 
-/* Grind stats panel (grind.js): sits just above the leaderboard on the left. */
+/* Grind stats panel (grind.js): sits just above the splits tracker on the right. */
 .srv-grind {
   position: fixed;
-  left: 0;
+  right: 0;
   top: calc(42vh - 8.4rem);
-  width: 270px;
+  width: 240px;
   box-sizing: border-box;
   padding: 7px 10px 8px;
   background: rgba(8, 31, 36, 0.68);
   border: 1px solid rgba(255, 255, 255, 0.2);
-  border-left: none;
-  border-radius: 0 0.45rem 0.45rem 0;
+  border-right: none;
+  border-radius: 0.45rem 0 0 0.45rem;
   color: #e6e9f0;
   font: 12px sans-serif;
   z-index: 999998;
