@@ -944,6 +944,7 @@ html.srv-hide-splits .srv-splits,
 html.srv-hide-input-analysis .srv-input-analysis,
 html.srv-hide-watch-controls .srv-spectate-hud,
 html.srv-hide-gear-hud .srv-gear-hud,
+html.srv-hide-grind-stats .srv-grind,
 html.srv-hide-own-input-hud .srv-own-input-hud {
   display: none !important;
 }
@@ -1190,6 +1191,7 @@ html.srv-hide-all .srv-own-input-hud,
 html.srv-hide-all .srv-replay-scrub,
 html.srv-hide-all .srv-input-analysis,
 html.srv-hide-all .srv-gear-hud,
+html.srv-hide-all .srv-grind,
 html.srv-hide-all .srv-ghost-bar,
 html.srv-hide-all .srv-gate-marker,
 html.srv-hide-all .srv-nameplate,
@@ -1291,4 +1293,66 @@ html.srv-hide-all .srv-timer-clone {
   height: 100%;
   border-radius: 1rem;
   background-color: rgba(255, 255, 255, 0.15);
+}
+
+/* Grind stats panel (grind.js): sits just above the leaderboard on the left. */
+.srv-grind {
+  position: fixed;
+  left: 0;
+  top: calc(42vh - 8.4rem);
+  width: 270px;
+  box-sizing: border-box;
+  padding: 7px 10px 8px;
+  background: rgba(8, 31, 36, 0.68);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-left: none;
+  border-radius: 0 0.45rem 0.45rem 0;
+  color: #e6e9f0;
+  font: 12px sans-serif;
+  z-index: 999998;
+  -webkit-backdrop-filter: blur(0.75rem);
+  backdrop-filter: blur(0.75rem);
+  box-shadow: 0 0.8rem 2rem rgba(0, 0, 0, 0.3);
+}
+.srv-grind-head,
+.srv-grind-foot,
+.srv-grind-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.srv-grind-head {
+  margin-bottom: 4px;
+}
+.srv-grind-title {
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.srv-grind-row span {
+  color: #8a93a6;
+}
+.srv-grind-row b {
+  font-variant-numeric: tabular-nums;
+}
+.srv-grind-foot {
+  margin-top: 4px;
+  font-size: 10px;
+  color: #8a93a6;
+}
+.srv-grind-scope,
+.srv-grind-reset {
+  background: rgba(90, 200, 255, 0.12);
+  border: 1px solid rgba(90, 200, 255, 0.5);
+  color: #5ac8ff;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 8px;
+  cursor: pointer;
+}
+.srv-grind-reset {
+  background: rgba(255, 90, 90, 0.1);
+  border-color: rgba(255, 90, 90, 0.45);
+  color: #ff8a8a;
 }

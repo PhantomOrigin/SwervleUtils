@@ -1712,6 +1712,7 @@
     { key: "srv-hide-watch-controls", label: "Watch controls (input keys, scrub bar, stop-watching bar)" },
     { key: "srv-hide-own-input-hud", label: "Live input keys (your own driving)" },
     { key: "srv-hide-gear-hud", label: "Gear shift HUD" },
+    { key: "srv-hide-grind-stats", label: "Grind stats (attempts, finishes, time)" },
     // Cosmetic sky clouds, drawn by srv-main.js (it just watches for this class on <html>).
     { key: "srv-hide-clouds", label: "Sky clouds" },
     // The yellow outline the site draws around the game canvas when it has
@@ -2116,6 +2117,14 @@
       children: () => [".srv-input-hud", ".srv-ghost-bar"].map((s) => document.querySelector(s)).filter(Boolean),
     },
     {
+      key: "grind-stats",
+      label: "Grind stats",
+      hideKey: "srv-hide-grind-stats",
+      ensure: () => window.SwervleGrind?.build(),
+      el: () => document.querySelector(".srv-grind"),
+      forceDisplay: "block", // it hides itself outside a ready race; the editor needs it visible
+    },
+    {
       key: "gear-hud",
       label: "Gear shift HUD",
       hideKey: "srv-hide-gear-hud",
@@ -2472,6 +2481,7 @@
     setupHideAllHotkey();
     applyHudVisibilityClasses();
     buildBoard();
+    window.SwervleGrind?.start().then(() => applyHudLayout("grind-stats", document.querySelector(".srv-grind"))).catch((err) => console.error("[Swervle Replay Viewer] grind stats failed", err));
     buildActiveGhostBar();
     buildInputHud();
     buildReplayScrub();
